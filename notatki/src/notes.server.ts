@@ -1,4 +1,4 @@
-import type { Note } from './notes.ts'
+import type { NewNote, Note } from './notes.ts'
 
 const sampleNotes: Note[] = [
   {
@@ -25,4 +25,10 @@ export function listNotes() {
 
 export function findNote(id: string) {
   return notes.find((note) => note.id === id)
+}
+
+export function insertNote(newNote: NewNote) {
+  const note: Note = { id: crypto.randomUUID(), ...newNote }
+  notes.push(note)
+  return note
 }

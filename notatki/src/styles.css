@@ -25,3 +25,14 @@ nav a.active {
 main {
   margin: 4rem auto;
 }
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 24rem;
+}
+
+.note-body {
+  white-space: pre-wrap;
+}

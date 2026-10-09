@@ -1,6 +1,7 @@
 import { notFound } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
-import { findNote, listNotes } from './notes.server.ts'
+import { findNote, insertNote, listNotes } from './notes.server.ts'
+import { parseNewNote } from './notes.ts'
 
 export const getNotes = createServerFn({ method: 'GET' }).handler(async () => {
   return listNotes()
@@ -14,4 +15,10 @@ export const getNote = createServerFn({ method: 'GET' })
       throw notFound()
     }
     return note
+  })
+
+export const addNote = createServerFn({ method: 'POST' })
+  .validator(parseNewNote)
+  .handler(async ({ data }) => {
+    return insertNote(data)
   })

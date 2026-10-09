@@ -13,7 +13,7 @@ function NoteDetails() {
   return (
     <>
       <h1>{note.title}</h1>
-      <p>{note.body}</p>
+      <p className="note-body">{note.body}</p>
       <Link to="/notes">Wróć do listy</Link>
     </>
   )

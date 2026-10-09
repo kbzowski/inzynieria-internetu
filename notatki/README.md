@@ -184,3 +184,64 @@ loader: ({ params }) => getNote({ data: params.noteId }),
 
 Gdy `getNote` rzuci `notFound()`, router zamiast `NoteDetails` pokazuje `notFoundComponent`
 tej trasy – „Nie ma takiej notatki” z linkiem do listy.
+
+## Krok 5 – dodawanie notatek
+
+Dane nowej notatki przychodzą z przeglądarki, więc najpierw opisuję je typem i funkcją, która
+je sprawdza. Oba trafiają do `src/notes.ts`:
+
+```ts
+export type NewNote = {
+  title: string
+  body: string
+}
+
+export function parseNewNote(input: NewNote) {
+  if (typeof input?.title !== 'string' || typeof input?.body !== 'string') {
+    throw new Error('Niepoprawne dane notatki')
+  }
+  ...
+  return { title, body }
+}
+```
+
+Typ parametru (`input: NewNote`) mówi TypeScriptowi, co wolno przekazać z naszego kodu. Ale na serwer
+przychodzi zwykłe zapytanie HTTP i ktoś może wysłać cokolwiek, więc `parseNewNote` sprawdza dane
+naprawdę: `typeof` upewnia się, że przyszły teksty, potem przycina spacje, odrzuca pusty tytuł
+i pilnuje długości (tytuł do 100 znaków, treść do 2000). Bez limitu ktoś mógłby wysyłać w pętli
+notatki po kilka megabajtów i zapchać pamięć serwera. Funkcja zwraca poprawne dane albo rzuca
+wyjątek – i jest zwykłą funkcją, więc łatwo ją kiedyś przetestować.
+
+W `notes.server.ts` dochodzi `insertNote`, a w `notes.functions.ts` funkcja serwerowa:
+
+```tsx
+export const addNote = createServerFn({ method: 'POST' })
+  .validator(parseNewNote)
+  .handler(async ({ data }) => {
+    return insertNote(data)
+  })
+```
+
+`method: 'POST'`, bo funkcja zmienia dane na serwerze.
+
+Formularz na `/notes` wygląda jak w zwykłym React: dwa kontrolowane pola i `handleSubmit`.
+Różnica jest w środku – zamiast zmieniać stan z tablicą wołam funkcję serwerową, a potem
+`router.invalidate({ sync: true })`, żeby loader pobrał nową listę z serwera. Opcja `sync: true`
+sprawia, że `await` czeka, aż nowa lista naprawdę przyjdzie.
+
+Funkcję serwerową opakowuję w `useServerFn(addNote)`, tak jak zaleca dokumentacja dla wywołań
+z komponentów: wtedy router obsłuży też rzucone z serwera `redirect` i `notFound`.
+
+Pustego tytułu nie sprawdzam w przeglądarce. Robi to tylko `parseNewNote` na serwerze, a błąd
+(`throw new Error('Tytuł jest wymagany')`) wraca do klienta jako zwykły wyjątek. Łapię go w `try/catch`
+i pokazuję pod formularzem. Dzięki temu reguła jest w jednym miejscu – tam, gdzie i tak musi być.
+
+Na czas wysyłania przycisk jest wyłączony (`isSubmitting`), tak jak w samouczku z dokumentacji –
+inaczej szybkie podwójne kliknięcie dodałoby notatkę dwa razy.
+
+Treść pochodzi z pola `<textarea>`, więc może mieć kilka wierszy. HTML domyślnie zamienia znaki
+nowej linii na spację, dlatego akapit z treścią na stronie szczegółów dostaje klasę `note-body`
+z regułą `white-space: pre-wrap`.
+
+Sprawdzenie: dodaj notatkę, zrestartuj `npm run dev` i odśwież stronę. Notatka zniknęła,
+bo była tylko w pamięci serwera.
