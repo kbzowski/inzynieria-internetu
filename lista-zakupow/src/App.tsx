@@ -19,6 +19,21 @@ function App({ initialItems = sampleItems }: AppProps) {
   // const setItems = state[1]
   const [items, setItems] = useState<Item[]>(initialItems)
 
+  function addItem(name: string) {
+    // samo name to skrot od name: name
+    const item: Item = { id: crypto.randomUUID(), name, bought: false }
+    // to samo co [...items, item], zapisane petla:
+    // const next = []
+    // for (const oldItem of items) {
+    //   next.push(oldItem)
+    // }
+    // next.push(item)
+    // setItems(next)
+    // samo items.push(item) nie wystarczy, bo React odswieza widok
+    // dopiero, gdy dostanie nowa tablice
+    setItems([...items, item])
+  }
+
   function toggleItem(id: string) {
     // to samo co map, zapisane petla:
     // const next = []
@@ -54,7 +69,7 @@ function App({ initialItems = sampleItems }: AppProps) {
   return (
     <main>
       <h1>Lista zakupów</h1>
-      <ItemForm />
+      <ItemForm onAdd={addItem} />
       <ItemList items={items} onToggle={toggleItem} onRemove={removeItem} />
     </main>
   )
