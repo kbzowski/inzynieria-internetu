@@ -142,3 +142,31 @@ W `App.tsx` przekazuję propsy jak atrybuty HTML. Tekst w cudzysłowie, liczbę 
 
 Od tej chwili TypeScript pilnuje wywołań: `<Counter label="Kroki" />` bez `step` się nie skompiluje,
 a `step="1"` też nie, bo to tekst zamiast liczby.
+
+## Krok 5 – stan i zdarzenia
+
+Liczba na ekranie ma się zmieniać. Zwykła zmienna `let value = 0` nie wystarczy: React nie wie,
+że po jej zmianie trzeba narysować komponent od nowa, a przy każdym rysowaniu i tak wróciłaby do 0.
+Do tego służy stan (state) i funkcja `useState`:
+
+```tsx
+const [value, setValue] = useState(0)
+```
+
+`useState` zwraca parę: bieżącą wartość i funkcję, która ją zmienia. Wywołanie `setValue` zapamiętuje
+nową wartość i każe Reactowi narysować komponent jeszcze raz. Typ `number` TypeScript wywnioskował sam
+z wartości początkowej `0`.
+
+Przyciski dostają `onClick` – funkcję, którą React wywoła po kliknięciu:
+
+```tsx
+<button onClick={() => setValue(value - step)} disabled={value < step}>
+  -{step}
+</button>
+<button onClick={() => setValue(0)}>Zeruj</button>
+<button onClick={() => setValue(value + step)}>+{step}</button>
+```
+
+`disabled={value < step}` wyłącza przycisk odejmowania, gdy licznik zszedłby poniżej zera.
+
+Każdy `<Counter />` ma swój własny stan – kliknięcie w „Kroki” nie zmienia „Punktów”.
