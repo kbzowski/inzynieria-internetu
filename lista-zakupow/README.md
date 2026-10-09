@@ -225,3 +225,31 @@ const left = items.filter((item) => !item.bought).length
 
 i pokazuję pod listą: `<p>Do kupienia: {left}</p>`. Gdy `items` się zmieni, React narysuje `App`
 od nowa, a `left` policzy się samo.
+
+## Krok 8 – własny hook
+
+Aplikacja działa, więc porządkuję. W `App` są teraz dwie różne rzeczy: logika listy
+(stan, `left` i trzy funkcje zmieniające stan) oraz wygląd (JSX). Logikę przenoszę do osobnego
+pliku `src/useShoppingList.ts`:
+
+```ts
+function useShoppingList(initialItems: Item[]) {
+  const [items, setItems] = useState<Item[]>(initialItems)
+  ...
+  return { items, left, addItem, toggleItem, removeItem }
+}
+```
+
+Własny hook to zwykła funkcja, której nazwa zaczyna się od `use` i która w środku woła inne hooki
+(tu `useState`). Obowiązują go te same zasady co `useState`: wołamy go na najwyższym poziomie
+komponentu, nie w `if` ani w pętli. Plik ma rozszerzenie `.ts`, bo nie ma w nim JSX.
+
+`App` tylko bierze z hooka to, czego potrzebuje, i składa interfejs:
+
+```tsx
+const { items, left, addItem, toggleItem, removeItem } =
+  useShoppingList(initialItems)
+```
+
+Zachowanie aplikacji się nie zmieniło. Zyski: `App` czyta się szybciej, a logikę listy da się kiedyś
+przetestować bez rysowania formularza i przycisków (`renderHook` z Testing Library).
