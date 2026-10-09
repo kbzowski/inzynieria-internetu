@@ -71,3 +71,33 @@ niepowtarzalny klucz, po którym React rozpoznaje wiersze przy kolejnych rysowan
 Na tym etapie nic nie działa, ale widać, czy lista dobrze się rysuje.
 
 `import type` mówi wprost, że z pliku biorę tylko typ. Po zamianie na JavaScript ten import znika.
+
+## Krok 3 – podział na komponenty
+
+Patrzę na ekran i szukam kawałków, które mają jedną odpowiedzialność:
+
+```
+App              całość strony
+├── ItemForm     pole tekstowe i przycisk „Dodaj”
+└── ItemList     lista albo napis „Lista jest pusta”
+    └── ItemRow  jeden produkt: checkbox, nazwa, „Usuń”
+```
+
+Każdy komponent dostaje swój plik i swój typ propsów, np.:
+
+```tsx
+type ItemRowProps = {
+  item: Item
+}
+```
+
+`ItemList` dostaje całą tablicę, a każdemu `ItemRow` przekazuje jeden produkt. `key` jest teraz
+na `<ItemRow>`, bo to on jest elementem tablicy zwracanej przez `map`.
+
+Wszystko jest jeszcze statyczne:
+
+- checkbox ma `readOnly`, bo pokazuje wartość z danych, ale jeszcze nie umie jej zmienić,
+- „Usuń” nic nie robi; `aria-label` z nazwą produktu mówi czytnikom ekranu, który produkt usuwa,
+- „Dodaj” wysyła formularz w zwykły sposób przeglądarki, więc strona się przeładowuje. Zajmę się tym w kroku 6.
+
+Kupione produkty mają klasę `bought` (przekreślenie), dobraną warunkiem `item.bought ? 'bought' : ''`.

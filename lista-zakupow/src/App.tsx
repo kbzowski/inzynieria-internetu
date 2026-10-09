@@ -1,4 +1,6 @@
 import type { Item } from './types.ts'
+import ItemForm from './ItemForm.tsx'
+import ItemList from './ItemList.tsx'
 
 const sampleItems: Item[] = [
   { id: '1', name: 'Mleko', bought: false },
@@ -9,11 +11,8 @@ function App() {
   return (
     <main>
       <h1>Lista zakupów</h1>
-      <ul>
-        {sampleItems.map((item) => (
-          <li key={item.id}>{item.name}</li>
-        ))}
-      </ul>
+      <ItemForm />
+      <ItemList items={sampleItems} />
     </main>
   )
 }
