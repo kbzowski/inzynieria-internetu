@@ -69,3 +69,21 @@ rm -rf src/App.css src/assets public/icons.svg
 `src/index.css` skracam do kilku reguł, w `index.html` zmieniam `lang` na `pl` i tytuł na „Liczniki”.
 `src/App.tsx` zostawiam z samym nagłówkiem. `src/main.tsx` się nie zmienia – tylko montuje `<App />`
 w `<div id="root">` z `index.html`.
+
+## Krok 2 – statyczny widok
+
+Zaczynam od tego, co widać, a zachowanie dodaję na końcu. Najpierw sam HTML w `App.tsx`,
+bez żadnej logiki, żeby zobaczyć układ:
+
+```tsx
+<section className="counter">
+  <h2>Kroki</h2>
+  <p>0</p>
+  <button>-1</button>
+  <button>Zeruj</button>
+  <button>+1</button>
+</section>
+```
+
+Przyciski jeszcze nic nie robią, a liczba to zwykły tekst. W JSX atrybut `class` z HTML zapisuje
+się jako `className`, bo `class` to słowo zarezerwowane w JavaScripcie.
