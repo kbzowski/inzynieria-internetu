@@ -1,0 +1,25 @@
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+}
+
+main {
+  width: min(40rem, calc(100% - 2rem));
+  margin: 3rem auto;
+}
+
+.counter {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.counter p {
+  font-size: 2rem;
+  margin: 0.5rem 0;
+}
+
+.counter button {
+  margin-right: 0.5rem;
+}
