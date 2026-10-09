@@ -15,6 +15,8 @@ type AppProps = {
 function App({ initialItems = sampleItems }: AppProps) {
   const [items, setItems] = useState<Item[]>(initialItems)
 
+  const left = items.filter((item) => !item.bought).length
+
   function addItem(name: string) {
     const item: Item = { id: crypto.randomUUID(), name, bought: false }
     setItems([...items, item])
@@ -37,6 +39,7 @@ function App({ initialItems = sampleItems }: AppProps) {
       <h1>Lista zakupów</h1>
       <ItemForm onAdd={addItem} />
       <ItemList items={items} onToggle={toggleItem} onRemove={removeItem} />
+      <p>Do kupienia: {left}</p>
     </main>
   )
 }

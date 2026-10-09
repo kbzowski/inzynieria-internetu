@@ -203,3 +203,18 @@ function addItem(name: string) {
 
 `crypto.randomUUID()` to funkcja przeglądarki, która daje niepowtarzalny identyfikator.
 `[...items, item]` to nowa tablica: stare produkty i nowy na końcu.
+
+## Krok 7 – wartość wyliczana
+
+Pod listą chcę pokazać, ile produktów zostało do kupienia. Kusi, żeby dodać drugi stan `left`
+i zmieniać go w `addItem`, `toggleItem` i `removeItem`. To zły pomysł: wystarczy zapomnieć o nim
+w jednej funkcji i liczba rozjedzie się z listą.
+
+Zamiast tego liczę ją przy każdym rysowaniu z tego, co już jest w stanie:
+
+```tsx
+const left = items.filter((item) => !item.bought).length
+```
+
+i pokazuję pod listą: `<p>Do kupienia: {left}</p>`. Gdy `items` się zmieni, React narysuje `App`
+od nowa, a `left` policzy się samo.
