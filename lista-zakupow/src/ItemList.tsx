@@ -3,9 +3,10 @@ import ItemRow from './ItemRow.tsx'
 
 type ItemListProps = {
   items: Item[]
+  onToggle: (id: string) => void
 }
 
-function ItemList({ items }: ItemListProps) {
+function ItemList({ items, onToggle }: ItemListProps) {
   if (items.length === 0) {
     return <p>Lista jest pusta.</p>
   }
@@ -13,7 +14,7 @@ function ItemList({ items }: ItemListProps) {
   return (
     <ul>
       {items.map((item) => (
-        <ItemRow key={item.id} item={item} />
+        <ItemRow key={item.id} item={item} onToggle={onToggle} />
       ))}
     </ul>
   )
