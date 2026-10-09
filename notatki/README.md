@@ -245,3 +245,74 @@ z regułą `white-space: pre-wrap`.
 
 Sprawdzenie: dodaj notatkę, zrestartuj `npm run dev` i odśwież stronę. Notatka zniknęła,
 bo była tylko w pamięci serwera.
+
+## Krok 6 – wyszukiwarka
+
+Tekst wyszukiwania trzymam w adresie: `/notes?q=druga`. Dzięki temu wynik
+wyszukiwania można skopiować, wysłać komuś albo odświeżyć stronę i nic nie ginie.
+
+`$noteId` było parametrem w ścieżce. `?q=...` to parametr wyszukiwania (search param) – opcjonalny
+dodatek po znaku zapytania. Router traktuje go jak dane wejściowe z zewnątrz, więc trasa musi go
+najpierw sprawdzić w `validateSearch`:
+
+```tsx
+type NotesSearch = {
+  q?: string
+}
+
+validateSearch: (search: Record<string, unknown>): NotesSearch => {
+  const q = typeof search.q === 'string' ? search.q.trim() : ''
+  return { q: q === '' ? undefined : q }
+},
+```
+
+Spacje na brzegach są obcinane, a pusta fraza znika z adresu, więc `/notes?q=%20%20` to po prostu `/notes`.
+
+Od tej chwili `Route.useSearch()` zwraca `{ q?: string }` z poprawnym typem. `q` jest opcjonalne,
+więc `<Link to="/notes">` w nawigacji dalej działa bez podawania parametru.
+
+Loader nie widzi parametrów wyszukiwania bezpośrednio. Trzeba mu je przekazać przez `loaderDeps`:
+
+```tsx
+loaderDeps: ({ search }) => ({ q: search.q ?? '' }),
+loader: ({ deps }) => getNotes({ data: deps.q }),
+```
+
+Gdy `q` się zmienia, router sam uruchamia loader od nowa. Dokumentacja ostrzega, żeby w `loaderDeps`
+zwracać tylko to, czego loader naprawdę używa, a nie cały obiekt `search`.
+
+Filtrowanie dzieje się na serwerze. Zajmuje się nim zwykła funkcja `filterNotes` w `src/notes.ts`
+(bez wielkości liter, po tytule i treści), więc łatwo ją kiedyś przetestować.
+
+Wyszukiwarka to osobny formularz z polem `q` i przyciskiem „Szukaj”. Po wysłaniu zmieniam adres
+przez `Route.useNavigate()`:
+
+```tsx
+function handleSearch(event: SubmitEvent<HTMLFormElement>) {
+  event.preventDefault()
+  const text = new FormData(event.currentTarget).get('q')
+  navigate({ search: { q: typeof text === 'string' ? text : undefined } })
+}
+```
+
+`FormData` to obiekt przeglądarki, który zbiera wartości pól formularza po ich atrybucie `name`.
+Pole nie potrzebuje więc własnego stanu w Reakcie:
+
+```tsx
+<input key={q} name="q" type="search" defaultValue={q} ... />
+```
+
+`defaultValue` to tylko wartość startowa – dalej pole samo pamięta, co wpisano. `key={q}` sprawia,
+że gdy fraza w adresie się zmieni, React tworzy pole od nowa z nową wartością startową. Dzięki temu
+pole zawsze zgadza się z adresem: po wyszukaniu, po kliknięciu „Notatki” w menu, po „Wstecz”
+w przeglądarce i po dodaniu notatki.
+
+Dlaczego wyszukiwanie po wysłaniu, a nie przy każdej literze? Każda zmiana adresu uruchamia
+loader, czyli zapytanie do serwera. Pole spięte z adresem przy każdej literze gubi też znaki
+przy szybkim pisaniu, bo nowy adres przychodzi z opóźnieniem.
+
+Po dodaniu notatki formularz czyści filtr (`navigate({ search: {} })`). Inaczej nowa notatka,
+która nie pasuje do wpisanej frazy, nie pojawiłaby się na liście i wyglądałoby to, jakby zniknęła.
+
+W `getNotes` dochodzi walidator `(query: string) => (typeof query === 'string' ? query : '')`,
+bo fraza też przychodzi z zewnątrz, a `listNotes(query)` w `notes.server.ts` filtruje przez `filterNotes`.

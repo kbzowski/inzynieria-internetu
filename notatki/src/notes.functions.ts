@@ -3,9 +3,11 @@ import { createServerFn } from '@tanstack/react-start'
 import { findNote, insertNote, listNotes } from './notes.server.ts'
 import { parseNewNote } from './notes.ts'
 
-export const getNotes = createServerFn({ method: 'GET' }).handler(async () => {
-  return listNotes()
-})
+export const getNotes = createServerFn({ method: 'GET' })
+  .validator((query: string) => (typeof query === 'string' ? query : ''))
+  .handler(async ({ data }) => {
+    return listNotes(data)
+  })
 
 export const getNote = createServerFn({ method: 'GET' })
   .validator((id: string) => id)

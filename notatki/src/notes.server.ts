@@ -1,4 +1,4 @@
-import type { NewNote, Note } from './notes.ts'
+import { filterNotes, type NewNote, type Note } from './notes.ts'
 
 const sampleNotes: Note[] = [
   {
@@ -19,8 +19,8 @@ export function resetNotes() {
   notes = [...sampleNotes]
 }
 
-export function listNotes() {
-  return notes
+export function listNotes(query: string) {
+  return filterNotes(notes, query)
 }
 
 export function findNote(id: string) {

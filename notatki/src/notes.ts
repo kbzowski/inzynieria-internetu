@@ -26,3 +26,12 @@ export function parseNewNote(input: NewNote) {
   }
   return { title, body }
 }
+
+export function filterNotes(notes: Note[], query: string) {
+  const text = query.trim().toLowerCase()
+  return notes.filter(
+    (note) =>
+      note.title.toLowerCase().includes(text) ||
+      note.body.toLowerCase().includes(text),
+  )
+}
