@@ -105,3 +105,35 @@ w `styles.css`); przy `/` dałem `activeOptions={{ exact: true }}`, bo inaczej b
 
 Do trasy głównej dodaję też `notFoundComponent`. Bez niego zły adres, np. `/xyz`, pokazuje gołe
 „Not Found” – dokumentacja nazywa ten domyślny widok celowo nieładnym i zaleca własny.
+
+## Krok 3 – pierwsza funkcja serwerowa
+
+Na stronie startowej chcę pokazać coś, co na pewno pochodzi z serwera – jego zegar:
+
+```tsx
+const getServerTime = createServerFn({ method: 'GET' }).handler(async () => {
+  return new Date().toLocaleTimeString('pl-PL')
+})
+```
+
+`createServerFn` sprawia, że ciało funkcji zostaje na serwerze. Do przeglądarki trafia w jego miejsce
+krótki kod, który wysyła zapytanie HTTP. Wywołuję ją tak samo jak zwykłą funkcję.
+
+Dane dla strony pobiera `loader` trasy – router czeka na niego, zanim pokaże stronę:
+
+```tsx
+export const Route = createFileRoute('/')({
+  loader: () => getServerTime(),
+  component: Home,
+})
+```
+
+Komponent odbiera wynik przez `Route.useLoaderData()`, z poprawnym typem (tu `string`), bez
+pisania typu ręcznie. Przycisk „Odśwież” woła `router.invalidate()`, czyli każe uruchomić loader
+jeszcze raz.
+
+Jak sprawdzić, że to naprawdę serwer:
+
+- wyłącz JavaScript w przeglądarce i odśwież `/` – godzina dalej jest, bo HTML przyszedł gotowy z serwera,
+- loader działa w obu miejscach: przy pierwszym wejściu serwer woła funkcję bezpośrednio, a po przejściu
+  linkiem z innej strony przeglądarka wysyła zapytanie `GET /_serverFn/...` (widać je w zakładce Network).
