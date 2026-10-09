@@ -1,5 +1,5 @@
-import { useState } from 'react'
 import type { Item } from './types.ts'
+import useShoppingList from './useShoppingList.ts'
 import ItemForm from './ItemForm.tsx'
 import ItemList from './ItemList.tsx'
 
@@ -13,26 +13,8 @@ type AppProps = {
 }
 
 function App({ initialItems = sampleItems }: AppProps) {
-  const [items, setItems] = useState<Item[]>(initialItems)
-
-  const left = items.filter((item) => !item.bought).length
-
-  function addItem(name: string) {
-    const item: Item = { id: crypto.randomUUID(), name, bought: false }
-    setItems([...items, item])
-  }
-
-  function toggleItem(id: string) {
-    setItems(
-      items.map((item) =>
-        item.id === id ? { ...item, bought: !item.bought } : item,
-      ),
-    )
-  }
-
-  function removeItem(id: string) {
-    setItems(items.filter((item) => item.id !== id))
-  }
+  const { items, left, addItem, toggleItem, removeItem } =
+    useShoppingList(initialItems)
 
   return (
     <main>
