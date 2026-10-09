@@ -108,3 +108,45 @@ Wszystko jest jeszcze statyczne:
 - „Dodaj” wysyła formularz w zwykły sposób przeglądarki, więc strona się przeładowuje. Zajmę się tym w kroku 6.
 
 Kupione produkty mają klasę `bought` (przekreślenie), dobraną warunkiem `item.bought ? 'bought' : ''`.
+
+## Krok 4 – stan w najbliższym wspólnym rodzicu
+
+Odhaczenie produktu ma zmieniać dane, więc lista musi stać się stanem. Gdzie go trzymać?
+Listy potrzebuje `ItemList` (żeby ją pokazać), a w kolejnych krokach także `App` (żeby policzyć,
+ile zostało). Dlatego stan siedzi w najbliższym wspólnym rodzicu, czyli w `App`:
+
+```tsx
+const [items, setItems] = useState<Item[]>(initialItems)
+```
+
+Tutaj podaję typ jawnie (`<Item[]>`), żeby od razu było widać, co jest w stanie.
+
+Listę startową `App` dostaje w propsie `initialItems`, a gdy go nie ma, bierze `sampleItems`.
+`main.tsx` dalej renderuje samo `<App />`. Dzięki temu da się kiedyś łatwo napisać test:
+`<App initialItems={[]} />` pokaże pustą listę bez zmieniania kodu aplikacji.
+
+Zmianę stanu robi funkcja w `App`:
+
+```tsx
+function toggleItem(id: string) {
+  setItems(
+    items.map((item) =>
+      item.id === id ? { ...item, bought: !item.bought } : item,
+    ),
+  )
+}
+```
+
+Tworzy **nową** tablicę (`map`) z nowym obiektem dla zmienionego produktu (`{ ...item, bought: ... }`).
+Nie zmieniam starego obiektu w miejscu (`item.bought = true`) – React porównuje referencje
+i nie zauważyłby zmiany.
+
+Komponenty niżej nie dotykają stanu bezpośrednio. Dostają funkcję w propsach i tylko ją wołają.
+Typ takiego propsa opisuje, czego funkcja oczekuje:
+
+```ts
+onToggle: (id: string) => void
+```
+
+W `ItemRow` checkbox traci `readOnly` i dostaje `onChange={() => onToggle(item.id)}`.
+Dane płyną w dół (`items`), a informacja o kliknięciu wraca w górę (`onToggle`).
