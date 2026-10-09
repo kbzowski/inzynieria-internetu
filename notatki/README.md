@@ -64,3 +64,44 @@ Moje zmiany po wygenerowaniu:
   typ propsów dostaje nazwę `RootDocumentProps`,
 - w `router.tsx` zostawiam tylko potrzebne opcje,
 - `index.tsx` pokazuje nagłówek „Start”, a `styles.css` ma kilka podstawowych reguł.
+
+## Krok 2 – strony i nawigacja
+
+Routing jest oparty na plikach: plik w `src/routes` to adres.
+
+| adres | plik |
+|---|---|
+| `/` | `src/routes/index.tsx` |
+| `/about` | `src/routes/about.tsx` |
+| `/notes` | `src/routes/notes/index.tsx` |
+| `/notes/1`, `/notes/abc`, … | `src/routes/notes/$noteId.tsx` |
+
+Zakładam trzy nowe pliki. Gdy serwer `dev` działa, po zapisaniu pustego pliku sam wpisuje w nim
+szkielet z `createFileRoute('/about')` i dopisuje trasę do `routeTree.gen.ts`. Każda strona to zwykły
+komponent przypięty do trasy:
+
+```tsx
+export const Route = createFileRoute('/about')({
+  component: About,
+})
+```
+
+`$noteId` w nazwie pliku to parametr w ścieżce – fragment adresu, który może być dowolny.
+Komponent odczytuje go przez `Route.useParams()`, z typem `{ noteId: string }`.
+
+Na liście notatek na razie wpisuję na sztywno dwa linki:
+
+```tsx
+<Link to="/notes/$noteId" params={{ noteId: '1' }}>
+  Pierwsza notatka
+</Link>
+```
+
+`Link` przechodzi między stronami bez przeładowania. Router zna wszystkie trasy, więc
+`<Link to="/notse">` z literówką nie przejdzie przez TypeScript, a brak `params` przy `$noteId` też nie.
+
+W `__root.tsx` dochodzi `<nav>` z trzema linkami. Aktywny link dostaje klasę `active` (pogrubienie
+w `styles.css`); przy `/` dałem `activeOptions={{ exact: true }}`, bo inaczej byłby aktywny na każdej stronie.
+
+Do trasy głównej dodaję też `notFoundComponent`. Bez niego zły adres, np. `/xyz`, pokazuje gołe
+„Not Found” – dokumentacja nazywa ten domyślny widok celowo nieładnym i zaleca własny.

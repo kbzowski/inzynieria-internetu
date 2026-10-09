@@ -1,4 +1,9 @@
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
+import {
+  HeadContent,
+  Link,
+  Scripts,
+  createRootRoute,
+} from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import appCss from '../styles.css?url'
 
@@ -15,6 +20,7 @@ export const Route = createRootRoute({
       : [],
   }),
   shellComponent: RootDocument,
+  notFoundComponent: PageMissing,
 })
 
 type RootDocumentProps = {
@@ -28,9 +34,25 @@ function RootDocument({ children }: RootDocumentProps) {
         <HeadContent />
       </head>
       <body>
+        <nav>
+          <Link to="/" activeOptions={{ exact: true }}>
+            Start
+          </Link>
+          <Link to="/notes">Notatki</Link>
+          <Link to="/about">O aplikacji</Link>
+        </nav>
         <main>{children}</main>
         <Scripts />
       </body>
     </html>
+  )
+}
+
+function PageMissing() {
+  return (
+    <>
+      <h1>Nie ma takiej strony</h1>
+      <Link to="/">Wróć na start</Link>
+    </>
   )
 }

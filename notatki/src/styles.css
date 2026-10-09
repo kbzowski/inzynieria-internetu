@@ -7,7 +7,21 @@ body {
   font-family: system-ui, sans-serif;
 }
 
+nav,
 main {
   width: min(42rem, calc(100% - 2rem));
+}
+
+nav {
+  display: flex;
+  gap: 1rem;
+  margin: 1rem auto 0;
+}
+
+nav a.active {
+  font-weight: bold;
+}
+
+main {
   margin: 4rem auto;
 }
