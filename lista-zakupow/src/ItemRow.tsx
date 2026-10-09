@@ -3,15 +3,17 @@ import type { Item } from './types.ts'
 type ItemRowProps = {
   item: Item
   onToggle: (id: string) => void
+  onRemove: (id: string) => void
 }
 
-// { item, onToggle } wyjmuje pola z obiektu props, to samo co:
+// { item, onToggle, onRemove } wyjmuje pola z obiektu props, to samo co:
 // function ItemRow(props: ItemRowProps) {
 //   const item = props.item
 //   const onToggle = props.onToggle
+//   const onRemove = props.onRemove
 //   ...
 // }
-function ItemRow({ item, onToggle }: ItemRowProps) {
+function ItemRow({ item, onToggle, onRemove }: ItemRowProps) {
   return (
     <li>
       <label className={item.bought ? 'bought' : ''}>
@@ -22,7 +24,12 @@ function ItemRow({ item, onToggle }: ItemRowProps) {
         />
         {item.name}
       </label>
-      <button aria-label={`Usuń ${item.name}`}>Usuń</button>
+      <button
+        onClick={() => onRemove(item.id)}
+        aria-label={`Usuń ${item.name}`}
+      >
+        Usuń
+      </button>
     </li>
   )
 }

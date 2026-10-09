@@ -39,11 +39,23 @@ function App({ initialItems = sampleItems }: AppProps) {
     )
   }
 
+  function removeItem(id: string) {
+    // to samo co filter, zapisane petla:
+    // const next = []
+    // for (const item of items) {
+    //   if (item.id !== id) {
+    //     next.push(item)
+    //   }
+    // }
+    // setItems(next)
+    setItems(items.filter((item) => item.id !== id))
+  }
+
   return (
     <main>
       <h1>Lista zakupów</h1>
       <ItemForm />
-      <ItemList items={items} onToggle={toggleItem} />
+      <ItemList items={items} onToggle={toggleItem} onRemove={removeItem} />
     </main>
   )
 }

@@ -150,3 +150,19 @@ onToggle: (id: string) => void
 
 W `ItemRow` checkbox traci `readOnly` i dostaje `onChange={() => onToggle(item.id)}`.
 Dane płyną w dół (`items`), a informacja o kliknięciu wraca w górę (`onToggle`).
+
+## Krok 5 – usuwanie
+
+Drugą zmianę robię tym samym sposobem. W `App` dochodzi funkcja:
+
+```tsx
+function removeItem(id: string) {
+  setItems(items.filter((item) => item.id !== id))
+}
+```
+
+`filter` też zwraca **nową** tablicę – bez produktu o podanym `id`. Starej tablicy nie zmieniam
+(np. przez `splice`), z tego samego powodu co w kroku 4.
+
+`ItemList` i `ItemRow` dostają nowy props `onRemove: (id: string) => void`, a przycisk „Usuń”
+woła go w `onClick`. Gdy usunę wszystkie produkty, `ItemList` pokazuje „Lista jest pusta.”
