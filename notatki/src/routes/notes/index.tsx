@@ -1,24 +1,25 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
+import { getNotes } from '../../notes.functions.ts'
 
 export const Route = createFileRoute('/notes/')({
+  loader: () => getNotes(),
   component: Notes,
 })
 
 function Notes() {
+  const notes = Route.useLoaderData()
+
   return (
     <>
       <h1>Notatki</h1>
       <ul>
-        <li>
-          <Link to="/notes/$noteId" params={{ noteId: '1' }}>
-            Pierwsza notatka
-          </Link>
-        </li>
-        <li>
-          <Link to="/notes/$noteId" params={{ noteId: '2' }}>
-            Druga notatka
-          </Link>
-        </li>
+        {notes.map((note) => (
+          <li key={note.id}>
+            <Link to="/notes/$noteId" params={{ noteId: note.id }}>
+              {note.title}
+            </Link>
+          </li>
+        ))}
       </ul>
     </>
   )

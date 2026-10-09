@@ -137,3 +137,50 @@ Jak sprawdzić, że to naprawdę serwer:
 - wyłącz JavaScript w przeglądarce i odśwież `/` – godzina dalej jest, bo HTML przyszedł gotowy z serwera,
 - loader działa w obu miejscach: przy pierwszym wejściu serwer woła funkcję bezpośrednio, a po przejściu
   linkiem z innej strony przeglądarka wysyła zapytanie `GET /_serverFn/...` (widać je w zakładce Network).
+
+## Krok 4 – dane notatek na serwerze
+
+Notatki będą w zwykłej tablicy w pamięci serwera. Kod dzielę na trzy pliki według konwencji
+z dokumentacji TanStack Start:
+
+- `src/notes.ts` – typ `Note`; plik bez przyrostka, bo typ przydaje się wszędzie,
+- `src/notes.server.ts` – kod **tylko dla serwera**: tablica `notes` i zwykłe funkcje `listNotes`
+  i `findNote`. Gdy w przyszłości dojdzie baza danych, połączenie z nią też będzie tutaj.
+  `resetNotes` przywraca dwie przykładowe notatki – przyda się w testach,
+- `src/notes.functions.ts` – funkcje serwerowe (`createServerFn`), które **wolno importować
+  wszędzie**, także w komponentach: `getNotes` zwraca listę, a `getNote` jedną notatkę.
+
+Przyrostek `.server` to nie tylko nazwa. Wtyczka TanStack Start pilnuje, żeby taki plik nie trafił
+do kodu przeglądarki. Gdy zaimportuję `notes.server.ts` bezpośrednio w komponencie trasy,
+`npm run build` przerwie budowę komunikatem `[import-protection] Import denied in client environment`
+(w trybie `npm run dev` będzie tylko ostrzeżenie). Z `notes.functions.ts` jest inaczej: w przeglądarce
+ciała handlerów zostają podmienione na zapytania HTTP, więc import z `notes.server.ts` znika z kodu
+klienta. Można to sprawdzić: po `npm run build` tekstu notatek nie ma w żadnym pliku w `dist/client`.
+
+Funkcja, która przyjmuje dane, ma `.validator(...)`:
+
+```tsx
+export const getNote = createServerFn({ method: 'GET' })
+  .validator((id: string) => id)
+  .handler(async ({ data }) => {
+    const note = findNote(data)
+    if (!note) {
+      throw notFound()
+    }
+    return note
+  })
+```
+
+Walidator mówi TypeScriptowi, co wolno przekazać (`id: string`), a handler dostaje to w `data`.
+Identyfikatora nie trzeba sprawdzać dokładniej: coś, co nie jest tekstem, po prostu nie pasuje
+do żadnej notatki i kończy się `notFound()`.
+
+Na liście notatek loader woła `getNotes()`, a komponent rysuje linki z danych zamiast wpisanych
+na sztywno. Na stronie szczegółów loader dostaje parametr z adresu:
+
+```tsx
+loader: ({ params }) => getNote({ data: params.noteId }),
+```
+
+Gdy `getNote` rzuci `notFound()`, router zamiast `NoteDetails` pokazuje `notFoundComponent`
+tej trasy – „Nie ma takiej notatki” z linkiem do listy.
