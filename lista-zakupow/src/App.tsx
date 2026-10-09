@@ -19,6 +19,16 @@ function App({ initialItems = sampleItems }: AppProps) {
   // const setItems = state[1]
   const [items, setItems] = useState<Item[]>(initialItems)
 
+  // to samo co filter, zapisane petla:
+  // const notBought = []
+  // for (const item of items) {
+  //   if (!item.bought) {
+  //     notBought.push(item)
+  //   }
+  // }
+  // const left = notBought.length
+  const left = items.filter((item) => !item.bought).length
+
   function addItem(name: string) {
     // samo name to skrot od name: name
     const item: Item = { id: crypto.randomUUID(), name, bought: false }
@@ -71,6 +81,7 @@ function App({ initialItems = sampleItems }: AppProps) {
       <h1>Lista zakupów</h1>
       <ItemForm onAdd={addItem} />
       <ItemList items={items} onToggle={toggleItem} onRemove={removeItem} />
+      <p>Do kupienia: {left}</p>
     </main>
   )
 }
