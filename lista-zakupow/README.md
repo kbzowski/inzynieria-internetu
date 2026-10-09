@@ -40,3 +40,41 @@ formatowania.
 
 `src/index.css` skracam do kilku reguł, w `index.html` ustawiam `lang="pl"` i tytuł „Lista zakupów”,
 a `src/App.tsx` zostawiam z samym nagłówkiem.
+
+## Krok 2 – najpierw dane
+
+Zanim napiszę cokolwiek w JSX, zastanawiam się, jak wygląda jeden produkt. Typ trafia do osobnego
+pliku `src/types.ts`, bo w kolejnych krokach użyje go kilka komponentów:
+
+```ts
+export type Item = {
+  id: string
+  name: string
+  bought: boolean
+}
+```
+
+`id` jest potrzebne, bo nazwy mogą się powtarzać, a React musi odróżniać wiersze listy.
+
+W `App.tsx` wpisuję na sztywno tablicę `sampleItems` z dwoma produktami i wyświetlam ją przez `map`:
+
+```tsx
+const rows = sampleItems.map((item) => <li key={item.id}>{item.name}</li>)
+
+return (
+  <main>
+    <h1>Lista zakupów</h1>
+    <ul>{rows}</ul>
+  </main>
+)
+```
+
+`map` zamienia każdy produkt na element `<li>`. Każdy element listy dostaje `key` – stały,
+niepowtarzalny klucz, po którym React rozpoznaje wiersze przy kolejnych rysowaniach.
+Na tym etapie nic nie działa, ale widać, czy lista dobrze się rysuje.
+
+Wynik `map` trafia do zmiennej `rows`, a JSX wstawia ją w `<ul>{rows}</ul>`. Nad każdą operacją
+na tablicy (`map`, `filter`, `[...items, item]`) komentarz w kodzie pokazuje to samo zapisane
+zwykłą pętlą `for`.
+
+`import type` mówi wprost, że z pliku biorę tylko typ. Po zamianie na JavaScript ten import znika.
