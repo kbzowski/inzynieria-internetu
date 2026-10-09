@@ -4,8 +4,8 @@ function App() {
   return (
     <main>
       <h1>Liczniki</h1>
-      <Counter />
-      <Counter />
+      <Counter label="Kroki" step={1} />
+      <Counter label="Punkty" step={10} />
     </main>
   )
 }

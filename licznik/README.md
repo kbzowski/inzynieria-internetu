@@ -115,3 +115,30 @@ odróżnia własne komponenty od znaczników HTML. W `App.tsx` importuję go i u
 
 Na stronie są teraz dwa identyczne liczniki, oba z napisem „Kroki”. Żeby się różniły,
 komponent musi dostać dane z zewnątrz – to następny krok.
+
+## Krok 4 – propsy
+
+Oba liczniki różnią się nazwą i krokiem, o jaki zmienia się wartość. To są dane wejściowe
+komponentu, czyli propsy (props). Opisuję je typem z nazwą i odbieram w parametrze funkcji:
+
+```tsx
+type CounterProps = {
+  label: string
+  step: number
+}
+
+function Counter({ label, step }: CounterProps) {
+```
+
+`{ label, step }` to destrukturyzacja: od razu wyciągam dwa pola z obiektu propsów.
+W JSX wartości wstawiam w nawiasach klamrowych: `<h2>{label}</h2>`, `<button>+{step}</button>`.
+
+W `App.tsx` przekazuję propsy jak atrybuty HTML. Tekst w cudzysłowie, liczbę w klamrach:
+
+```tsx
+<Counter label="Kroki" step={1} />
+<Counter label="Punkty" step={10} />
+```
+
+Od tej chwili TypeScript pilnuje wywołań: `<Counter label="Kroki" />` bez `step` się nie skompiluje,
+a `step="1"` też nie, bo to tekst zamiast liczby.
