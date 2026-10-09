@@ -159,3 +159,47 @@ function removeItem(id: string) {
 
 `ItemList` i `ItemRow` dostają nowy props `onRemove: (id: string) => void`, a przycisk „Usuń”
 woła go w `onClick`. Gdy usunę wszystkie produkty, `ItemList` pokazuje „Lista jest pusta.”
+
+## Krok 6 – formularz dodawania
+
+`ItemForm` dostaje własny stan `name`, bo tekst w polu nikogo poza formularzem nie obchodzi.
+Pole jest kontrolowane (controlled input): jego wartość pochodzi ze stanu, a każda zmiana trafia
+z powrotem do stanu:
+
+```tsx
+<input
+  value={name}
+  onChange={(event) => setName(event.target.value)}
+  ...
+/>
+```
+
+Wysłanie formularza obsługuje `handleSubmit`:
+
+```tsx
+function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
+  event.preventDefault()
+  const trimmed = name.trim()
+  if (trimmed === '') {
+    return
+  }
+  onAdd(trimmed)
+  setName('')
+}
+```
+
+`event.preventDefault()` zatrzymuje domyślne zachowanie przeglądarki, czyli przeładowanie strony
+z kroku 3. Potem przycinam spacje, odrzucam pusty tekst i dopiero wtedy wołam `onAdd`.
+Typ zdarzenia `SubmitEvent<HTMLFormElement>` pochodzi z Reacta (`import { useState, type SubmitEvent } from 'react'`).
+
+W `App` dochodzi `addItem`:
+
+```tsx
+function addItem(name: string) {
+  const item: Item = { id: crypto.randomUUID(), name, bought: false }
+  setItems([...items, item])
+}
+```
+
+`crypto.randomUUID()` to funkcja przeglądarki, która daje niepowtarzalny identyfikator.
+`[...items, item]` to nowa tablica: stare produkty i nowy na końcu.
