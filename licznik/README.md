@@ -87,3 +87,31 @@ bez żadnej logiki, żeby zobaczyć układ:
 
 Przyciski jeszcze nic nie robią, a liczba to zwykły tekst. W JSX atrybut `class` z HTML zapisuje
 się jako `className`, bo `class` to słowo zarezerwowane w JavaScripcie.
+
+## Krok 3 – wydzielenie komponentu
+
+Chcę mieć dwa liczniki, więc kopiowanie całej `<section>` byłoby złym pomysłem: każdą poprawkę
+trzeba by robić w dwóch miejscach. Przenoszę ją do osobnego pliku `src/Counter.tsx`:
+
+```tsx
+function Counter() {
+  return (
+    <section className="counter">
+      ...
+    </section>
+  )
+}
+
+export default Counter
+```
+
+Komponent to zwykła funkcja, która zwraca JSX. Jej nazwa zaczyna się wielką literą – po tym React
+odróżnia własne komponenty od znaczników HTML. W `App.tsx` importuję go i używam dwa razy:
+
+```tsx
+<Counter />
+<Counter />
+```
+
+Na stronie są teraz dwa identyczne liczniki, oba z napisem „Kroki”. Żeby się różniły,
+komponent musi dostać dane z zewnątrz – to następny krok.
