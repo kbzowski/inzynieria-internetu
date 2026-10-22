@@ -329,33 +329,34 @@ const form = useForm({
 Wysłanie formularza nadal zaczyna się od `event.preventDefault()`, a potem przekazuje sterowanie
 bibliotece przez `form.handleSubmit()`.
 
-Pole opisuje komponent `form.Field`. Jako dziecko dostaje funkcję, która otrzymuje obiekt `field`
-i zwraca JSX:
+Pole formularza daje hook `useField`. Dostaje formularz i nazwę pola, a zwraca obiekt z jego
+wartością, błędami i funkcją do zmiany wartości:
 
 ```tsx
-<form.Field name="name">
-  {(field) => (
-    <>
-      <input
-        value={field.state.value}
-        onChange={(event) => field.handleChange(event.target.value)}
-        onBlur={field.handleBlur}
-        ...
-      />
-      <button type="submit">Dodaj</button>
-      {field.state.meta.errors.length > 0 && (
-        <p role="alert">{field.state.meta.errors[0]?.message}</p>
-      )}
-    </>
-  )}
-</form.Field>
+const nameField = useField({ form, name: 'name' })
+```
+
+```tsx
+<input
+  value={nameField.state.value}
+  onChange={(event) => nameField.handleChange(event.target.value)}
+  ...
+/>
+<button type="submit">Dodaj</button>
+{nameField.state.meta.errors.length > 0 && (
+  <p role="alert">{nameField.state.meta.errors[0]?.message}</p>
+)}
 ```
 
 Pole nadal jest kontrolowane, jak w kroku 6. Różnica polega na tym, że wartość trzyma formularz
-(`field.state.value`, `field.handleChange`), a nie `useState` w komponencie. `name="name"` musi być
-jednym z kluczy `defaultValues`; literówka nie przejdzie przez TypeScript.
+(`nameField.state.value`, `nameField.handleChange`), a nie `useState` w komponencie. `name: 'name'`
+musi być jednym z kluczy `defaultValues`; literówka nie przejdzie przez TypeScript.
 
-Błędy walidacji są w `field.state.meta.errors`. Pokazuję pierwszy z nich w elemencie z `role="alert"`,
+Dokumentacja TanStack Form pokazuje zwykle komponent `<form.Field name="name">`, któremu jako dziecko
+przekazuje się funkcję zwracającą JSX. W środku korzysta on z tego samego `useField`. Przy jednym
+polu hook jest prostszy do przeczytania.
+
+Błędy walidacji są w `nameField.state.meta.errors`. Pokazuję pierwszy z nich w elemencie z `role="alert"`,
 który czytniki ekranu odczytują od razu.
 
 Jak sprawdzić:
