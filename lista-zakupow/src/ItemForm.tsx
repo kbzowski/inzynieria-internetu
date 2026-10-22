@@ -1,4 +1,4 @@
-import { useForm } from '@tanstack/react-form'
+import { useField, useForm } from '@tanstack/react-form'
 import type { SubmitEvent } from 'react'
 import { newItemSchema } from './types.ts'
 
@@ -16,6 +16,7 @@ function ItemForm({ onAdd }: ItemFormProps) {
       form.reset()
     },
   })
+  const nameField = useField({ form, name: 'name' })
 
   function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -25,23 +26,16 @@ function ItemForm({ onAdd }: ItemFormProps) {
   // errors[0]?.message daje undefined, gdy errors[0] nie istnieje (zamiast bledu)
   return (
     <form onSubmit={handleSubmit}>
-      <form.Field name="name">
-        {(field) => (
-          <>
-            <input
-              value={field.state.value}
-              onChange={(event) => field.handleChange(event.target.value)}
-              onBlur={field.handleBlur}
-              placeholder="Co kupić?"
-              aria-label="Nazwa produktu"
-            />
-            <button type="submit">Dodaj</button>
-            {field.state.meta.errors.length > 0 && (
-              <p role="alert">{field.state.meta.errors[0]?.message}</p>
-            )}
-          </>
-        )}
-      </form.Field>
+      <input
+        value={nameField.state.value}
+        onChange={(event) => nameField.handleChange(event.target.value)}
+        placeholder="Co kupić?"
+        aria-label="Nazwa produktu"
+      />
+      <button type="submit">Dodaj</button>
+      {nameField.state.meta.errors.length > 0 && (
+        <p role="alert">{nameField.state.meta.errors[0]?.message}</p>
+      )}
     </form>
   )
 }
