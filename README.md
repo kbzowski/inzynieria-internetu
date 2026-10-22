@@ -7,7 +7,7 @@ tylko ten opis.
 | projekt | czego uczy | gałęzie |
 |---|---|---|
 | `licznik` | komponent, propsy, stan, zdarzenia w React | `licznik/01-szkielet` … `licznik/05-stan` |
-| `lista-zakupow` | kilka komponentów, stan w rodzicu, listy, formularz, własny hook | `lista-zakupow/01-szkielet` … `lista-zakupow/08-hook` |
+| `lista-zakupow` | kilka komponentów, stan w rodzicu, listy, formularz, własny hook, TanStack Form i Zod | `lista-zakupow/01-szkielet` … `lista-zakupow/09-tanstack-form` |
 | `notatki` | TanStack Start: routing z plików, loadery, funkcje serwerowe, parametry w adresie | `notatki/01-szkielet` … `notatki/06-wyszukiwarka` |
 
 Projekty `licznik` i `lista-zakupow` to sam interfejs (React + Vite). `notatki` to aplikacja fullstack.

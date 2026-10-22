@@ -6,7 +6,8 @@ a dane przechodzą w dół przez propsy i wracają w górę przez funkcje.
 Na końcu można dodać produkt, odhaczyć go jako kupiony i usunąć. Pod listą widać, ile zostało do kupienia.
 Danych nigdzie nie zapisuję – po odświeżeniu strony lista wraca do stanu początkowego.
 
-Wersje: Node 24, npm 11, create-vite 9, Vite 8.3, React 19.2, TypeScript 6.0.
+Wersje: Node 24, npm 11, create-vite 9, Vite 8.3, React 19.2, TypeScript 6.0,
+od kroku 9 także @tanstack/react-form 1.33 i Zod 4.6.
 
 ## Uruchomienie
 
@@ -253,3 +254,113 @@ const { items, left, addItem, toggleItem, removeItem } =
 
 Zachowanie aplikacji się nie zmieniło. Zyski: `App` czyta się szybciej, a logikę listy da się kiedyś
 przetestować bez rysowania formularza i przycisków (`renderHook` z Testing Library).
+
+## Krok 9 – formularz w TanStack Form, walidacja z Zod
+
+Formularz z kroku 6 obsługuje jedno pole i jedną regułę („nie może być puste”), a wynik sprawdzenia
+po prostu przerywa dodawanie. Przy większych formularzach ręczne trzymanie stanu każdego pola,
+reguł walidacji i komunikatów błędów szybko się rozrasta. Dlatego w tym kroku formularz przechodzi
+na dwie biblioteki:
+
+- **TanStack Form** – trzyma wartości pól, stan formularza (np. czy pole było już edytowane)
+  i błędy walidacji,
+- **Zod** – opisuje, jakie dane są poprawne.
+
+```bash
+npm install @tanstack/react-form zod
+```
+
+Pozostałe komponenty i hook `useShoppingList` się nie zmieniają.
+
+### Schemat Zod
+
+Zod opisuje kształt danych schematem (schema). Schemat umie sprawdzić wartość w czasie działania
+programu, a TypeScript potrafi wyprowadzić z niego typ. W `src/types.ts` typ `Item` zastępuje schemat:
+
+```ts
+export const itemSchema = z.object({
+  id: z.string(),
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Wpisz nazwę produktu')
+    .max(50, 'Nazwa może mieć najwyżej 50 znaków'),
+  bought: z.boolean(),
+})
+
+export type Item = z.infer<typeof itemSchema>
+```
+
+- `z.infer` wyprowadza typ ze schematu. `Item` ma te same pola co wcześniej, ale opis jest tylko
+  w jednym miejscu, więc typ i reguły walidacji nie mogą się rozjechać,
+- `.trim()` przycina spacje przed sprawdzeniem długości, więc samo `"   "` nie przejdzie,
+- teksty w `min` i `max` to komunikaty błędów dla użytkownika.
+
+Formularz nie zna `id` ani `bought`, potrzebuje tylko nazwy. `pick` wybiera ze schematu wskazane pola:
+
+```ts
+export const newItemSchema = itemSchema.pick({ name: true })
+```
+
+### Formularz
+
+`useForm` tworzy formularz. Dostaje wartości początkowe, walidator i funkcję wywoływaną po
+poprawnej walidacji:
+
+```tsx
+const form = useForm({
+  defaultValues: { name: '' },
+  validators: { onChange: newItemSchema },
+  onSubmit: ({ value }) => {
+    onAdd(value.name.trim())
+    form.reset()
+  },
+})
+```
+
+- `defaultValues` określa pola formularza i ich typy; TypeScript wie, że `value.name` to `string`,
+- `validators: { onChange: newItemSchema }` sprawdza dane schematem przy każdej zmianie pola
+  i przy wysłaniu formularza. Schemat Zod można podać wprost, bo obie biblioteki obsługują
+  wspólny standard opisu walidatorów (Standard Schema),
+- `onSubmit` uruchamia się tylko wtedy, gdy walidacja przeszła,
+- walidator sprawdza dane, ale ich nie zmienia, dlatego `trim()` jest wywoływane jeszcze raz,
+- `form.reset()` przywraca wartości początkowe i czyści błędy.
+
+Wysłanie formularza nadal zaczyna się od `event.preventDefault()`, a potem przekazuje sterowanie
+bibliotece przez `form.handleSubmit()`.
+
+Pole opisuje komponent `form.Field`. Jako dziecko dostaje funkcję, która otrzymuje obiekt `field`
+i zwraca JSX:
+
+```tsx
+<form.Field name="name">
+  {(field) => (
+    <>
+      <input
+        value={field.state.value}
+        onChange={(event) => field.handleChange(event.target.value)}
+        onBlur={field.handleBlur}
+        ...
+      />
+      <button type="submit">Dodaj</button>
+      {field.state.meta.errors.length > 0 && (
+        <p role="alert">{field.state.meta.errors[0]?.message}</p>
+      )}
+    </>
+  )}
+</form.Field>
+```
+
+Pole nadal jest kontrolowane, jak w kroku 6. Różnica polega na tym, że wartość trzyma formularz
+(`field.state.value`, `field.handleChange`), a nie `useState` w komponencie. `name="name"` musi być
+jednym z kluczy `defaultValues`; literówka nie przejdzie przez TypeScript.
+
+Błędy walidacji są w `field.state.meta.errors`. Pokazuję pierwszy z nich w elemencie z `role="alert"`,
+który czytniki ekranu odczytują od razu.
+
+Jak sprawdzić:
+
+- kliknij „Dodaj” przy pustym polu – pojawia się „Wpisz nazwę produktu”,
+- wpisz 51 znaków – komunikat o długości pojawia się w trakcie pisania,
+- wpisz nazwę ze spacjami na początku i końcu – produkt zostaje dodany bez spacji, a pole i komunikat
+  się czyszczą.
