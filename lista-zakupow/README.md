@@ -4,7 +4,8 @@ Drugi przykład po liczniku. Tu stan jest tablicą obiektów, dzieli go kilka ko
 a dane przechodzą w dół przez propsy i wracają w górę przez funkcje.
 
 Na końcu można dodać produkt, odhaczyć go jako kupiony i usunąć. Pod listą widać, ile zostało do kupienia.
-Danych nigdzie nie zapisuję – po odświeżeniu strony lista wraca do stanu początkowego.
+Do kroku 9 danych nigdzie nie zapisuję, więc po odświeżeniu strony lista wraca do stanu początkowego.
+Od kroku 10 lista jest zapisywana w pamięci przeglądarki (localStorage).
 
 Wersje: Node 24, npm 11, create-vite 9, Vite 8.3, React 19.2, TypeScript 6.0,
 od kroku 9 także @tanstack/react-form 1.33 i Zod 4.6.
@@ -367,3 +368,112 @@ Jak sprawdzić:
 - wpisz 51 znaków – komunikat o długości pojawia się w trakcie pisania,
 - wpisz nazwę ze spacjami na początku i końcu – produkt zostaje dodany bez spacji, a pole i komunikat
   się czyszczą.
+
+## Krok 10 – zapis w localStorage
+
+Po odświeżeniu strony React zaczyna od zera, więc lista wraca do `sampleItems`. Przeglądarka ma
+prosty magazyn danych localStorage: pary klucz i wartość przypisane do adresu strony (origin),
+które zostają po zamknięciu karty i przeglądarki. Potrzebne są dwie funkcje:
+
+```ts
+localStorage.setItem('lista-zakupow', tekst) // zapis
+localStorage.getItem('lista-zakupow') // odczyt, null gdy klucza nie ma
+```
+
+Wartości są tekstem, dlatego przy zapisie zamieniam tablicę na JSON (`JSON.stringify`), a przy
+odczycie z powrotem na tablicę (`JSON.parse`).
+
+TanStack Form nie zajmuje się zapisem danych. Formularz trzyma tylko tekst wpisywany w pole,
+a listę trzyma hook `useShoppingList`, więc to w nim trzeba podłączyć zapis.
+
+### Odczyt i zapis w osobnym pliku
+
+Obsługa localStorage trafia do `src/storage.ts` jako dwie zwykłe funkcje, bez Reacta:
+
+```ts
+const STORAGE_KEY = 'lista-zakupow'
+const savedItemsSchema = z.array(itemSchema)
+
+export function loadItems(fallback: Item[]): Item[] {
+  const saved = localStorage.getItem(STORAGE_KEY)
+  if (saved === null) {
+    return fallback
+  }
+
+  let data: unknown
+  try {
+    data = JSON.parse(saved)
+  } catch {
+    return fallback
+  }
+
+  const result = savedItemsSchema.safeParse(data)
+  if (!result.success) {
+    return fallback
+  }
+  return result.data
+}
+
+export function saveItems(items: Item[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
+}
+```
+
+Dane z localStorage pochodzą spoza programu, tak jak tekst wpisany przez użytkownika. Mogą to być dane
+zapisane przez starszą wersję aplikacji albo tekst zmieniony ręcznie w narzędziach przeglądarki.
+Dlatego `loadItems` obsługuje trzy przypadki:
+
+- klucza nie ma (`null`) – nic jeszcze nie zapisano, więc zwracam listę startową `fallback`,
+- tekst nie jest poprawnym JSON-em – `JSON.parse` rzuca wyjątek, który łapie `try`/`catch`,
+- JSON ma inny kształt niż tablica produktów – sprawdza to schemat Zod zbudowany z `itemSchema`
+  z kroku 9. `safeParse` nie rzuca wyjątku, tylko zwraca obiekt z polem `success`.
+
+`JSON.parse` zwraca typ `any`, więc TypeScript przyjąłby jego wynik jako `Item[]` bez żadnego
+sprawdzenia, a błąd wyszedłby dopiero przy rysowaniu listy. Zmienna `data` ma typ `unknown`, który
+nie pozwala użyć wartości, dopóki jej nie sprawdzę. Typ `Item[]` daje dopiero `result.data`.
+
+### Podłączenie do hooka
+
+W `useShoppingList` zmieniają się dwie rzeczy:
+
+```ts
+const [items, setItems] = useState<Item[]>(() => loadItems(initialItems))
+
+useEffect(() => {
+  saveItems(items)
+}, [items])
+```
+
+`useState` dostaje funkcję startową (lazy initializer). React wywołuje ją tylko przy pierwszym
+rysowaniu. Zapis `useState(loadItems(initialItems))` też by działał, ale wtedy localStorage
+byłby czytany i parsowany przy każdym rysowaniu, a wynik i tak zostałby pominięty.
+
+`useEffect` służy do synchronizacji komponentu z czymś poza Reactem, tutaj z localStorage.
+React uruchamia efekt po narysowaniu komponentu i ponownie po każdym rysowaniu, w którym zmieniła się
+któraś wartość z tablicy zależności `[items]`. Zapis jest w jednym miejscu, a nie w `addItem`,
+`toggleItem` i `removeItem` z osobna, więc nowa funkcja zmieniająca listę nie może go pominąć.
+To ten sam argument co przy `left` w kroku 7.
+
+Efekt uruchamia się także po pierwszym rysowaniu i zapisuje z powrotem wczytaną listę.
+W trybie deweloperskim `StrictMode` uruchamia go dwa razy. Oba zapisy są nieszkodliwe,
+bo zapisują tę samą listę.
+
+`initialItems` zmienia znaczenie: jest używana tylko wtedy, gdy w localStorage nic nie ma.
+Pusta tablica `[]` to zapisana pusta lista, a nie brak danych, więc po usunięciu wszystkich produktów
+i odświeżeniu strony lista zostaje pusta. Przyszłe testy powinny czyścić localStorage
+(`localStorage.clear()`) przed każdym przypadkiem, żeby nie zależały od siebie nawzajem.
+
+Ograniczenia localStorage:
+
+- mieści kilka megabajtów na adres strony i działa synchronicznie, więc nadaje się do małych danych,
+- każdy skrypt uruchomiony na stronie może go odczytać, dlatego nie zapisuje się tam haseł ani tokenów,
+- dwie otwarte karty z aplikacją mają osobny stan i każda nadpisuje zapis drugiej.
+
+Jak sprawdzić:
+
+- dodaj produkt, odhacz inny i odśwież stronę – lista się nie zmienia,
+- otwórz narzędzia deweloperskie (F12), zakładkę _Application_, sekcję _Local Storage_ – pod kluczem
+  `lista-zakupow` widać listę w formacie JSON,
+- zmień tam wartość na `{zepsuty` i odśwież stronę – aplikacja pokazuje listę startową zamiast błędu,
+- usuń wszystkie produkty i odśwież stronę – lista zostaje pusta,
+- żeby wrócić do listy startowej, usuń klucz `lista-zakupow` w tej samej sekcji.
