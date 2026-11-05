@@ -1,12 +1,20 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Item } from './types.ts'
+import { loadItems, saveItems } from './storage.ts'
 
 function useShoppingList(initialItems: Item[]) {
   // useState zwraca tablice z dwoma elementami, to samo co:
-  // const state = useState<Item[]>(initialItems)
+  // const state = useState<Item[]>(() => loadItems(initialItems))
   // const items = state[0]
   // const setItems = state[1]
-  const [items, setItems] = useState<Item[]>(initialItems)
+  // funkcje startowa React wywoluje tylko przy pierwszym rysowaniu,
+  // wiec localStorage jest czytany raz, a nie przy kazdym rysowaniu
+  const [items, setItems] = useState<Item[]>(() => loadItems(initialItems))
+
+  // localStorage jest poza Reactem, efekt zapisuje do niego liste po kazdej zmianie items
+  useEffect(() => {
+    saveItems(items)
+  }, [items])
 
   // to samo co filter, zapisane petla:
   // const notBought = []
