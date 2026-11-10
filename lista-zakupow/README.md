@@ -244,6 +244,8 @@ Własny hook to zwykła funkcja, której nazwa zaczyna się od `use` i która w 
 (tu `useState`). Obowiązują go te same zasady co `useState`: wołamy go na najwyższym poziomie
 komponentu, nie w `if` ani w pętli. Plik ma rozszerzenie `.ts`, bo nie ma w nim JSX.
 
+Komentarze z odpowiednikami w pętli `for` zostają w kodzie kroku 7. Hook ich już nie powtarza.
+
 `App` tylko bierze z hooka to, czego potrzebuje, i składa interfejs:
 
 ```tsx
