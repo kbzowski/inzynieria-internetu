@@ -7,26 +7,17 @@ const STORAGE_KEY = 'lista-zakupow'
 // albo tekst zmieniony recznie w narzedziach przegladarki, wiec sprawdzam je schematem
 const savedItemsSchema = z.array(itemSchema)
 
-export function loadItems(fallback: Item[]): Item[] {
-  const saved = localStorage.getItem(STORAGE_KEY)
-  // null oznacza, ze jeszcze nic nie zapisano
-  if (saved === null) {
-    return fallback
-  }
-
-  let data: unknown
+export function loadItems(): Item[] {
   try {
-    data = JSON.parse(saved)
+    // null oznacza, ze jeszcze nic nie zapisano, wtedy biore pusta liste
+    const saved = localStorage.getItem(STORAGE_KEY) ?? '[]'
+    const data: unknown = JSON.parse(saved)
+    // parse rzuca wyjatek, gdy dane maja inny ksztalt niz tablica produktow
+    return savedItemsSchema.parse(data)
   } catch {
-    // zapisany tekst nie jest poprawnym JSON-em
-    return fallback
+    // zly JSON albo zly ksztalt danych, wiec zaczynam od pustej listy
+    return []
   }
-
-  const result = savedItemsSchema.safeParse(data)
-  if (!result.success) {
-    return fallback
-  }
-  return result.data
 }
 
 export function saveItems(items: Item[]) {

@@ -371,7 +371,7 @@ Jak sprawdzić:
 
 ## Krok 10 – zapis w localStorage
 
-Po odświeżeniu strony React zaczyna od zera, więc lista wraca do `sampleItems`. Przeglądarka ma
+Po odświeżeniu strony React zaczyna od zera, więc lista wraca do `sampleItems`, a dodane produkty znikają. Przeglądarka ma
 prosty magazyn danych localStorage: pary klucz i wartość przypisane do adresu strony (origin),
 które zostają po zamknięciu karty i przeglądarki. Potrzebne są dwie funkcje:
 
@@ -394,24 +394,14 @@ Obsługa localStorage trafia do `src/storage.ts` jako dwie zwykłe funkcje, bez 
 const STORAGE_KEY = 'lista-zakupow'
 const savedItemsSchema = z.array(itemSchema)
 
-export function loadItems(fallback: Item[]): Item[] {
-  const saved = localStorage.getItem(STORAGE_KEY)
-  if (saved === null) {
-    return fallback
-  }
-
-  let data: unknown
+export function loadItems(): Item[] {
   try {
-    data = JSON.parse(saved)
+    const saved = localStorage.getItem(STORAGE_KEY) ?? '[]'
+    const data: unknown = JSON.parse(saved)
+    return savedItemsSchema.parse(data)
   } catch {
-    return fallback
+    return []
   }
-
-  const result = savedItemsSchema.safeParse(data)
-  if (!result.success) {
-    return fallback
-  }
-  return result.data
 }
 
 export function saveItems(items: Item[]) {
@@ -423,21 +413,26 @@ Dane z localStorage pochodzą spoza programu, tak jak tekst wpisany przez użytk
 zapisane przez starszą wersję aplikacji albo tekst zmieniony ręcznie w narzędziach przeglądarki.
 Dlatego `loadItems` obsługuje trzy przypadki:
 
-- klucza nie ma (`null`) – nic jeszcze nie zapisano, więc zwracam listę startową `fallback`,
-- tekst nie jest poprawnym JSON-em – `JSON.parse` rzuca wyjątek, który łapie `try`/`catch`,
+- klucza nie ma (`null`) – nic jeszcze nie zapisano, więc operator `??` podstawia tekst `'[]'`,
+  czyli pustą listę,
+- tekst nie jest poprawnym JSON-em – `JSON.parse` rzuca wyjątek,
 - JSON ma inny kształt niż tablica produktów – sprawdza to schemat Zod zbudowany z `itemSchema`
-  z kroku 9. `safeParse` nie rzuca wyjątku, tylko zwraca obiekt z polem `success`.
+  z kroku 9. `parse` w takim przypadku rzuca wyjątek.
+
+Oba wyjątki łapie `try`/`catch` i funkcja zwraca pustą listę. Aplikacja nie przestaje działać
+z powodu zepsutych danych, ale te dane przepadają przy pierwszym zapisie.
 
 `JSON.parse` zwraca typ `any`, więc TypeScript przyjąłby jego wynik jako `Item[]` bez żadnego
 sprawdzenia, a błąd wyszedłby dopiero przy rysowaniu listy. Zmienna `data` ma typ `unknown`, który
-nie pozwala użyć wartości, dopóki jej nie sprawdzę. Typ `Item[]` daje dopiero `result.data`.
+nie pozwala użyć wartości, dopóki jej nie sprawdzę. Typ `Item[]` daje dopiero wynik `parse`.
 
 ### Podłączenie do hooka
 
-W `useShoppingList` zmieniają się dwie rzeczy:
+Lista startowa pochodzi teraz z localStorage, więc `sampleItems` i props `initialItems` znikają z `App`,
+a `useShoppingList` nie przyjmuje już parametru. W samym hooku zmieniają się dwie rzeczy:
 
 ```ts
-const [items, setItems] = useState<Item[]>(() => loadItems(initialItems))
+const [items, setItems] = useState<Item[]>(() => loadItems())
 
 useEffect(() => {
   saveItems(items)
@@ -445,7 +440,7 @@ useEffect(() => {
 ```
 
 `useState` dostaje funkcję startową (lazy initializer). React wywołuje ją tylko przy pierwszym
-rysowaniu. Zapis `useState(loadItems(initialItems))` też by działał, ale wtedy localStorage
+rysowaniu. Zapis `useState(loadItems())` też by działał, ale wtedy localStorage
 byłby czytany i parsowany przy każdym rysowaniu, a wynik i tak zostałby pominięty.
 
 `useEffect` służy do synchronizacji komponentu z czymś poza Reactem, tutaj z localStorage.
@@ -458,9 +453,7 @@ Efekt uruchamia się także po pierwszym rysowaniu i zapisuje z powrotem wczytan
 W trybie deweloperskim `StrictMode` uruchamia go dwa razy. Oba zapisy są nieszkodliwe,
 bo zapisują tę samą listę.
 
-`initialItems` zmienia znaczenie: jest używana tylko wtedy, gdy w localStorage nic nie ma.
-Pusta tablica `[]` to zapisana pusta lista, a nie brak danych, więc po usunięciu wszystkich produktów
-i odświeżeniu strony lista zostaje pusta. Przyszłe testy powinny czyścić localStorage
+Przy pierwszym uruchomieniu lista jest pusta. Przyszłe testy powinny czyścić localStorage
 (`localStorage.clear()`) przed każdym przypadkiem, żeby nie zależały od siebie nawzajem.
 
 Ograniczenia localStorage:
@@ -474,6 +467,5 @@ Jak sprawdzić:
 - dodaj produkt, odhacz inny i odśwież stronę – lista się nie zmienia,
 - otwórz narzędzia deweloperskie (F12), zakładkę _Application_, sekcję _Local Storage_ – pod kluczem
   `lista-zakupow` widać listę w formacie JSON,
-- zmień tam wartość na `{zepsuty` i odśwież stronę – aplikacja pokazuje listę startową zamiast błędu,
-- usuń wszystkie produkty i odśwież stronę – lista zostaje pusta,
-- żeby wrócić do listy startowej, usuń klucz `lista-zakupow` w tej samej sekcji.
+- zmień tam wartość na `{zepsuty` i odśwież stronę – aplikacja pokazuje pustą listę zamiast błędu,
+- usuń wszystkie produkty i odśwież stronę – lista zostaje pusta.

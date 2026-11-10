@@ -1,27 +1,16 @@
-import type { Item } from './types.ts'
 import useShoppingList from './useShoppingList.ts'
 import ItemForm from './ItemForm.tsx'
 import ItemList from './ItemList.tsx'
 
-const sampleItems: Item[] = [
-  { id: '1', name: 'Mleko', bought: false },
-  { id: '2', name: 'Chleb', bought: true },
-]
-
-type AppProps = {
-  initialItems?: Item[]
-}
-
-function App({ initialItems = sampleItems }: AppProps) {
+function App() {
   // wyjmuje pola z obiektu zwroconego przez hook, to samo co:
-  // const list = useShoppingList(initialItems)
+  // const list = useShoppingList()
   // const items = list.items
   // const left = list.left
   // const addItem = list.addItem
   // const toggleItem = list.toggleItem
   // const removeItem = list.removeItem
-  const { items, left, addItem, toggleItem, removeItem } =
-    useShoppingList(initialItems)
+  const { items, left, addItem, toggleItem, removeItem } = useShoppingList()
 
   return (
     <main>
