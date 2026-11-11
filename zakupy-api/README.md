@@ -5,7 +5,7 @@ z bazą danych, logowaniem i testami. Produkt ma ten sam kształt co w projekcie
 (`id`, `name`, `bought`), więc później frontend będzie mógł korzystać z tego API.
 
 Wersje: Node 24, npm 11, NestJS 12.4, @nestjs/cli 12.0, @nestjs/swagger 12.1, TypeScript 6.0, Zod 4.6,
-Prisma 7.10 z bazą SQLite.
+Prisma 7.10 z bazą SQLite, @nestjs/jwt 12.0, argon2 0.45.
 
 ## Uruchomienie
 
@@ -856,3 +856,195 @@ Kolejne zapytania używają `{{itemId}}`. Dlatego po uruchomieniu serwera najpie
 
 Tablica w pamięci porównywała nazwy według zasad języka polskiego. W SQLite wymagałoby to
 dodatkowych rozszerzeń, więc w przykładzie zostaje zachowanie domyślne.
+
+## Krok 11 – konta użytkowników i token JWT
+
+Każdy użytkownik ma teraz własną listę zakupów. Żeby API wiedziało, kto wysyła zapytanie,
+użytkownik loguje się raz i dostaje token, który dołącza do kolejnych zapytań.
+
+```bash
+npm install -E @nestjs/jwt argon2
+```
+
+Nest 12 ma też gotowy pakiet `@nestjs/authentication` (w listopadzie 2026 w wersji 0.1), który robi
+to wszystko sam. Tutaj mechanizm powstaje ręcznie, żeby było widać, jak działa.
+
+### Baza
+
+W `schema.prisma` dochodzi model `User`, a produkt dostaje właściciela:
+
+```prisma
+model User {
+  id           String @id @default(uuid(7))
+  email        String @unique
+  passwordHash String
+  items        Item[]
+}
+
+model Item {
+  ...
+  userId String
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+}
+```
+
+`@@unique([userId, name])` zastępuje `@unique` przy nazwie produktu: dwie osoby mogą mieć
+„Mleko” na liście, ale jedna osoba nie może mieć go dwa razy. `onDelete: Cascade` usuwa produkty
+razem z użytkownikiem.
+
+Nowa kolumna `userId` jest wymagana, a stare produkty nie mają właściciela, więc migracji nie da się
+wykonać na bazie z danymi z kroku 10. Bazę trzeba wyczyścić i wypełnić od nowa:
+
+```bash
+npm install                # nowe pakiety, a przy okazji prisma generate
+npx prisma migrate reset   # usuwa dane i wykonuje wszystkie migracje od początku
+npm run db:seed            # konto ala@example.com z hasłem haslo1234 i 3 produkty
+```
+
+Po zmianie modelu wygenerowany klient musi poznać nowe pola, inaczej kompilacja zgłosi np.
+`Property 'user' does not exist on type 'PrismaService'`. Tutaj klienta generuje `npm install`,
+a przy kolejnych zmianach modelu robi to `npm run db:migrate`.
+
+### Rejestracja i logowanie
+
+Nowy moduł `src/auth` ma kontroler, serwis, repozytorium użytkowników i strażnika (guard).
+Obie trasy przyjmują ten sam schemat danych:
+
+```ts
+export const credentialsSchema = z.object({
+  email: z.email().toLowerCase(),
+  password: z.string().min(8, 'Hasło musi mieć co najmniej 8 znaków'),
+});
+```
+
+| zapytanie | odpowiedź |
+|---|---|
+| `POST /auth/register` | 201 i `{ id, email }`; zajęty e-mail: 409 `EMAIL_TAKEN` |
+| `POST /auth/login` | 200 i `{ accessToken, user }`; złe dane: 401 `INVALID_CREDENTIALS` |
+
+Hasło nie trafia do bazy. Zapisuję jego skrót z funkcji `argon2.hash`, a przy logowaniu `argon2.verify`
+sprawdza, czy podane hasło daje ten sam skrót. Argon2 liczy skrót celowo wolno i z dużym zużyciem
+pamięci, żeby po wycieku bazy odgadywanie haseł było bardzo kosztowne.
+
+Przy złym e-mailu i przy złym haśle odpowiedź jest taka sama:
+
+```
+{"message":"Zły e-mail lub hasło","error":"Unauthorized","statusCode":401,"errorCode":"INVALID_CREDENTIALS"}
+```
+
+Osobne komunikaty pozwoliłyby sprawdzić, czy dany e-mail ma konto w serwisie. Ten przykład
+nie ukrywa tego całkowicie. Rejestracja zajętego adresu odpowiada 409, a logowanie na nieistniejące
+konto kończy się szybciej, bo serwer nie liczy wtedy skrótu hasła. Pełna ochrona wymaga np. potwierdzania
+rejestracji e-mailem.
+
+`UsersRepository.findByEmail` zwraca użytkownika ze skrótem hasła, bo serwis potrzebuje go
+do `argon2.verify`. Odpowiedzi budowane są z typu `UserDto` (`id`, `email`), więc skrót nigdy
+nie wychodzi z serwera.
+
+### Token JWT
+
+Po poprawnym logowaniu serwis tworzy token:
+
+```ts
+const accessToken = await this.jwt.signAsync({ sub: user.id });
+```
+
+JWT (JSON Web Token) to trzy części oddzielone kropkami: nagłówek, treść (payload) i podpis.
+Treść jest tylko zakodowana (Base64URL), a nie zaszyfrowana. Każdy może ją odczytać:
+
+```json
+{"sub":"01a1c9ff-f4f2-7589-ac7f-2c58580ce173","iat":1794390365,"exp":1794391265}
+```
+
+`sub` to id użytkownika, `iat` czas wydania, a `exp` czas wygaśnięcia (sekundy od 1970 roku).
+Treść jest jawna, więc w tokenie nie umieszcza się haseł ani innych tajnych danych.
+
+Podpis serwer liczy z sekretem `JWT_SECRET`. Kto nie zna sekretu, nie zmieni treści tokenu,
+bo podpis przestanie się zgadzać. Dlatego sekret musi być długi i nie może trafić do repozytorium.
+
+Sekret z `.env.example` jest jawny, bo jest w repozytorium, więc nadaje się tylko do pracy na własnym
+komputerze. Na serwerze trzeba ustawić własny, losowy (polecenie do jego wygenerowania jest w komentarzu
+w `.env.example`).
+
+Sekret i czas ważności tokenu (`ACCESS_TOKEN_TTL`, w sekundach, tu 15 minut) są w `.env`
+i w schemacie `env.ts`. `JwtModule.register` w `AuthModule` dostaje je raz,
+a opcja `global: true` udostępnia `JwtService` wszystkim modułom, także `ItemsModule`, w którym działa strażnik.
+
+### Strażnik
+
+Strażnik (guard) to klasa, którą Nest uruchamia przed metodą kontrolera. Gdy zwróci `true`,
+zapytanie idzie dalej. Gdy rzuci wyjątek, metoda się nie wykona.
+
+```ts
+async canActivate(context: ExecutionContext): Promise<boolean> {
+  const request = context.switchToHttp().getRequest<AuthRequest>();
+  const [type, token] = request.headers.authorization?.split(' ') ?? [];
+  if (type !== 'Bearer' || !token) {
+    throw new UnauthorizedException('Brak tokenu');
+  }
+  try {
+    const payload = await this.jwt.verifyAsync<AccessTokenPayload>(token);
+    request.userId = payload.sub;
+  } catch {
+    throw new UnauthorizedException('Nieprawidłowy lub wygasły token');
+  }
+  return true;
+}
+```
+
+Nagłówek ma postać `Authorization: Bearer <token>`. Słowo `Bearer` (okaziciel) oznacza, że dostęp ma
+każdy, kto okaże token, dlatego token trzeba chronić jak hasło. `AuthRequest` to typ zapytania
+z Expressa rozszerzony o pole `userId`: `Request & { userId: string }` (operator `&` łączy dwa typy).
+
+`verifyAsync` sprawdza podpis i czas ważności. Strażnik zapisuje id użytkownika w obiekcie zapytania,
+a kontroler odczytuje je przez `@Req()`:
+
+```ts
+@UseGuards(AuthGuard)
+@ApiBearerAuth()
+@Controller('items')
+export class ItemsController {
+  @Get()
+  findAll(
+    @Req() request: AuthRequest,
+    @Query({ schema: itemsQuerySchema }) query: ItemsQueryDto,
+  ) {
+    return this.itemsService.findAll(request.userId, query);
+  }
+```
+
+`@UseGuards` nad klasą obejmuje wszystkie trasy kontrolera. Nest tworzy strażnika sam i wstrzykuje
+mu `JwtService`, dostępny w `ItemsModule` dzięki `global: true`.
+
+### Produkty jednego użytkownika
+
+Serwis i repozytorium dostają `userId` jako pierwszy parametr, a każde zapytanie do bazy ma go w `where`:
+
+```ts
+findById(userId: string, id: string): Promise<ItemDto | null> {
+  return this.prisma.item.findFirst({ where: { userId, id }, select });
+}
+```
+
+Gdyby repozytorium szukało tylko po `id`, wystarczyłoby znać identyfikator cudzego produktu,
+żeby go odczytać albo usunąć. Ten błąd nazywa się IDOR (Insecure Direct Object Reference).
+Cudzy produkt kończy się tak samo jak nieistniejący, kodem 404, żeby nie zdradzać, że taki
+identyfikator w ogóle istnieje.
+
+`select` wybiera pola wysyłane klientowi (`id`, `name`, `bought`), więc `userId` nie trafia do odpowiedzi
+i kształt produktu się nie zmienia. Limit `MAX_ITEMS` i sprawdzenie nazwy dotyczą teraz listy jednego użytkownika.
+
+### Zapytania
+
+W `requests.http` najpierw trzeba wysłać „Logowanie”. Skrypt po odpowiedzi zapisuje token,
+a zapytania o produkty wysyłają go w nagłówku:
+
+```http
+GET {{baseUrl}}/items
+Authorization: Bearer {{accessToken}}
+```
+
+Na stronie `/docs` przycisk „Authorize” pozwala wkleić token, który Swagger dołączy do zapytań
+(to daje `addBearerAuth()` w `configureApp` i `@ApiBearerAuth()` nad kontrolerem).

@@ -12,39 +12,44 @@ const sortOrder = {
   '-name': { name: 'desc' },
 } as const;
 
+// pola wysylane klientowi, bez userId
+const select = { id: true, name: true, bought: true };
+
+// kazde zapytanie ma userId w where: uzytkownik widzi i zmienia tylko swoje produkty
 @Injectable()
 export class ItemsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(query: ItemsQueryDto): Promise<ItemDto[]> {
+  findAll(userId: string, query: ItemsQueryDto): Promise<ItemDto[]> {
     // pola z wartoscia undefined Prisma pomija, wiec brak parametru = brak filtra
     return this.prisma.item.findMany({
-      where: { bought: query.bought, name: { contains: query.q } },
+      where: { userId, bought: query.bought, name: { contains: query.q } },
       orderBy: query.sort ? sortOrder[query.sort] : { id: 'asc' },
+      select,
     });
   }
 
-  findById(id: string): Promise<ItemDto | null> {
-    return this.prisma.item.findUnique({ where: { id } });
+  findById(userId: string, id: string): Promise<ItemDto | null> {
+    return this.prisma.item.findFirst({ where: { userId, id }, select });
   }
 
-  findByName(name: string): Promise<ItemDto | null> {
-    return this.prisma.item.findUnique({ where: { name } });
+  findByName(userId: string, name: string): Promise<ItemDto | null> {
+    return this.prisma.item.findFirst({ where: { userId, name }, select });
   }
 
-  count(bought?: boolean): Promise<number> {
-    return this.prisma.item.count({ where: { bought } });
+  count(userId: string, bought?: boolean): Promise<number> {
+    return this.prisma.item.count({ where: { userId, bought } });
   }
 
-  create(data: CreateItemDto): Promise<ItemDto> {
-    return this.prisma.item.create({ data });
+  create(userId: string, data: CreateItemDto): Promise<ItemDto> {
+    return this.prisma.item.create({ data: { ...data, userId }, select });
   }
 
-  update(id: string, data: UpdateItemDto): Promise<ItemDto> {
-    return this.prisma.item.update({ where: { id }, data });
+  update(userId: string, id: string, data: UpdateItemDto): Promise<ItemDto> {
+    return this.prisma.item.update({ where: { userId, id }, data, select });
   }
 
-  async remove(id: string) {
-    await this.prisma.item.delete({ where: { id } });
+  async remove(userId: string, id: string) {
+    await this.prisma.item.delete({ where: { userId, id } });
   }
 }

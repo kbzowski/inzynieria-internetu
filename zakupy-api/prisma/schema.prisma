@@ -7,9 +7,21 @@ datasource db {
   provider = "sqlite"
 }
 
+model User {
+  id           String @id @default(uuid(7))
+  email        String @unique
+  passwordHash String
+  items        Item[]
+}
+
 model Item {
   // uuid(7) zaczyna sie od czasu utworzenia, wiec sortowanie po id daje kolejnosc dodania
   id     String  @id @default(uuid(7))
-  name   String  @unique
+  name   String
   bought Boolean @default(false)
+  userId String
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // nazwa jest unikalna na liscie jednego uzytkownika
+  @@unique([userId, name])
 }

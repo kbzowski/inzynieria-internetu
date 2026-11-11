@@ -22,7 +22,10 @@ export function configureApp(app: INestApplication) {
   app.enableShutdownHooks();
 
   // dokumentacja API pod /docs, opis tras i schematow z kodu
-  const config = new DocumentBuilder().setTitle('Zakupy API').build();
+  const config = new DocumentBuilder()
+    .setTitle('Zakupy API')
+    .addBearerAuth()
+    .build();
   SwaggerModule.setup('docs', app, () =>
     SwaggerModule.createDocument(app, config),
   );

@@ -1,7 +1,33 @@
 @baseUrl = http://localhost:3000
 
+### Logowanie (konto z danych startowych, zapamiętuje token)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "ala@example.com", "password": "haslo1234" }
+
+> {%
+  client.global.set('accessToken', response.body.accessToken);
+%}
+
+### Złe hasło (401)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "ala@example.com", "password": "zlehaslo1" }
+
+### Rejestracja nowego konta (201, drugi raz 409)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{ "email": "ola@example.com", "password": "haslo5678" }
+
+### Lista bez tokenu (401)
+GET {{baseUrl}}/items
+
 ### Lista produktów (zapamiętuje identyfikatory do kolejnych zapytań)
 GET {{baseUrl}}/items
+Authorization: Bearer {{accessToken}}
 
 > {%
   client.global.set('itemId', response.body[0].id);
@@ -11,78 +37,96 @@ GET {{baseUrl}}/items
 
 ### Tylko produkty do kupienia
 GET {{baseUrl}}/items?bought=false
+Authorization: Bearer {{accessToken}}
 
 ### Wyszukiwanie po fragmencie nazwy
 GET {{baseUrl}}/items?q=le
+Authorization: Bearer {{accessToken}}
 
 ### Sortowanie po nazwie malejąco
 GET {{baseUrl}}/items?sort=-name
+Authorization: Bearer {{accessToken}}
 
 ### Kilka parametrów naraz
 GET {{baseUrl}}/items?bought=false&sort=name
+Authorization: Bearer {{accessToken}}
 
 ### Złe wartości parametrów (400)
 GET {{baseUrl}}/items?bought=abc&sort=price
+Authorization: Bearer {{accessToken}}
 
 ### Jeden produkt
 GET {{baseUrl}}/items/{{itemId}}
+Authorization: Bearer {{accessToken}}
 
 ### Produkt, którego nie ma (404)
 GET {{baseUrl}}/items/99999999-9999-4999-8999-999999999999
+Authorization: Bearer {{accessToken}}
 
 ### Identyfikator w złym formacie (400)
 GET {{baseUrl}}/items/123
+Authorization: Bearer {{accessToken}}
 
 ### Dodanie produktu (201)
 POST {{baseUrl}}/items
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 { "name": "Masło" }
 
 ### Oznaczenie produktu jako kupionego
 PATCH {{baseUrl}}/items/{{itemId}}
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 { "bought": true }
 
 ### Usunięcie produktu (204)
 DELETE {{baseUrl}}/items/{{thirdItemId}}
+Authorization: Bearer {{accessToken}}
 
 ### Nazwa jako liczba (400)
 POST {{baseUrl}}/items
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 { "name": 42 }
 
 ### Brak nazwy (400)
 POST {{baseUrl}}/items
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {}
 
 ### Nadmiarowe pola w PATCH są pomijane (200, produkt bez zmian)
 PATCH {{baseUrl}}/items/{{secondItemId}}
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 { "id": "abc", "admin": true }
 
 ### Pusta nazwa po obcięciu spacji (400)
 POST {{baseUrl}}/items
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 { "name": "   " }
 
 ### Produkt o tej nazwie już jest (409)
 POST {{baseUrl}}/items
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 { "name": "Mleko" }
 
 ### Zmiana nazwy na zajętą (409)
 PATCH {{baseUrl}}/items/{{secondItemId}}
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 { "name": "Mleko" }
 
 ### Podsumowanie listy
 GET {{baseUrl}}/items/summary
+Authorization: Bearer {{accessToken}}
