@@ -5,7 +5,7 @@ z bazą danych, logowaniem i testami. Produkt ma ten sam kształt co w projekcie
 (`id`, `name`, `bought`), więc później frontend będzie mógł korzystać z tego API.
 
 Wersje: Node 24, npm 11, NestJS 12.4, @nestjs/cli 12.0, @nestjs/swagger 12.1, TypeScript 6.0, Zod 4.6,
-Prisma 7.10 z bazą SQLite, @nestjs/jwt 12.0, argon2 0.45.
+Prisma 7.10 z bazą SQLite, @nestjs/jwt 12.0, argon2 0.45, Vitest 5.1.
 
 ## Uruchomienie
 
@@ -18,6 +18,7 @@ npm run start:dev    # serwer z automatycznym restartem po zmianie kodu, http://
 npm run build        # kompilacja do katalogu dist i sprawdzenie typów
 npm run start:prod   # uruchomienie skompilowanej wersji z dist
 npm run format       # Prettier, formatowanie kodu
+npm test             # testy automatyczne (od kroku 13)
 ```
 
 ## Krok 1 – szkielet projektu
@@ -1173,3 +1174,96 @@ i nie usuwa też z bazy tokenów, które wygasły bez wylogowania.
 Klient HTTP w WebStormie zapamiętuje ciasteczka tak jak przeglądarka. Po „Logowanie” zapytanie
 „Nowy access token” wysyła ciasteczko samo, a skrypt po odpowiedzi podmienia zmienną `accessToken`.
 Po „Wylogowanie” kolejna próba odświeżenia kończy się 401.
+
+## Krok 13 – testy jednostkowe
+
+Test jednostkowy sprawdza jedną klasę w oderwaniu od reszty: bez bazy, bez serwera HTTP i bez sieci.
+Dzięki temu działa w ułamku sekundy i zawsze daje ten sam wynik.
+
+```bash
+npm install -E -D vitest @nestjs/testing
+npm test
+```
+
+```
+ Test Files  2 passed (2)
+      Tests  7 passed (7)
+```
+
+Testy uruchamia Vitest, domyślne narzędzie w projektach ESM tworzonych przez Nest 12. Pliki testów
+są obok testowanego kodu i kończą się na `.spec.ts`. Ustawienia są w `vitest.config.ts`. Vitest
+nie wczytuje pliku `.env`, a `env.ts` bez kompletu zmiennych zatrzymuje program, dlatego zmienne
+mają tam stałe wartości, np. `MAX_ITEMS: '3'`. Wynik testów nie zależy wtedy od komputera.
+
+### Serwis z podstawionym repozytorium
+
+`items.service.spec.ts` sprawdza reguły `ItemsService`: dodanie produktu, powtórzoną nazwę, limit i 404.
+Prawdziwe repozytorium potrzebuje bazy, więc w teście zastępuje je prosta klasa z tablicą,
+`FakeItemsRepository`. Ma tylko te metody, których używają testowane reguły.
+
+```ts
+const moduleRef = await Test.createTestingModule({
+  providers: [
+    ItemsService,
+    { provide: ItemsRepository, useValue: new FakeItemsRepository() },
+  ],
+}).compile();
+service = moduleRef.get(ItemsService);
+```
+
+`Test.createTestingModule` buduje mały moduł Nesta tylko na potrzeby testu. Wpis
+`{ provide: ItemsRepository, useValue: ... }` mówi: tam, gdzie ktoś potrzebuje `ItemsRepository`,
+wstrzyknij ten obiekt. Serwis dostaje go w konstruktorze i nie wie, że to nie jest prawdziwe repozytorium.
+Kod produkcyjny nie zmienia się na potrzeby testu, co umożliwia wstrzykiwanie zależności.
+`useValue` nie sprawdza typu, dlatego `FakeItemsRepository` może mieć tylko część metod. Ma to też
+wadę: gdy prawdziwe repozytorium się zmieni, podróbka może się z nim rozjechać bez ostrzeżenia.
+
+`beforeEach` tworzy nowy moduł przed każdym testem, więc produkt dodany w jednym teście nie wpływa
+na kolejny.
+
+```ts
+it('odrzuca nazwę, która już jest na liście', async () => {
+  await expect(service.create(USER_ID, { name: 'Mleko' })).rejects.toThrow(
+    'jest już na liście',
+  );
+});
+```
+
+Test sprawdza treść komunikatu, a nie sam typ wyjątku, bo `ConflictException` rzuca też limit listy.
+
+### Strażnik i udawany zegar
+
+`auth.guard.spec.ts` sprawdza `AuthGuard`. Strażnika test tworzy zwykłym `new AuthGuard(jwt)`
+z prawdziwym `JwtService`, bo nie ma tu nic do podstawienia. Kontekst zapytania zastępuje obiekt z jedną metodą,
+której strażnik używa (`switchToHttp().getRequest()`).
+
+Test wygasania tokenu nie może czekać 15 minut, więc Vitest podmienia zegar:
+
+```ts
+vi.useFakeTimers();
+vi.setSystemTime(new Date('2026-11-11T10:00:00Z'));
+...
+const token = await jwt.signAsync({ sub: 'user-1' });
+vi.advanceTimersByTime(14 * 60 * 1000);
+// strażnik jeszcze wpuszcza
+vi.advanceTimersByTime(60 * 1000 + 1000);
+// token wygasł, strażnik odrzuca
+```
+
+`vi.advanceTimersByTime` przesuwa udawany zegar, a `Date.now()` zwraca od razu późniejszy czas.
+Czas ważności (15 minut) ustawia `JwtService` utworzony w samym teście, więc test sprawdza strażnika,
+a nie ustawienie `ACCESS_TOKEN_TTL` w aplikacji. Stała data startowa sprawia, że test daje ten sam wynik o każdej porze dnia.
+`afterEach` przywraca prawdziwy zegar.
+
+### Konfiguracja TypeScriptu
+
+Pliki testów nie powinny trafiać do `dist`, ale edytor ma je sprawdzać tak jak resztę kodu.
+Dlatego konfiguracje są dwie, tak jak w pełnym szablonie Nesta:
+
+- `tsconfig.json` obejmuje cały projekt i z niego korzysta WebStorm,
+- `tsconfig.build.json` dziedziczy po nim, bierze tylko `src` i pomija pliki `*.spec.ts`.
+  Używa go `nest build`, który sam szuka pliku o tej nazwie.
+
+Repozytorium i kontroler nie mają testów jednostkowych. Repozytorium to same zapytania do bazy,
+więc sprawdza się je na prawdziwej bazie (krok 14). Kontroler tylko przekazuje dane dalej,
+a jego trasy sprawdzają testy całego API (krok 15).
