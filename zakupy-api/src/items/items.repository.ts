@@ -40,6 +40,14 @@ export class ItemsRepository {
     return this.items.find((item) => item.id === id);
   }
 
+  findByName(name: string): ItemDto | undefined {
+    return this.items.find((item) => item.name === name);
+  }
+
+  count(): number {
+    return this.items.length;
+  }
+
   create(data: CreateItemDto): ItemDto {
     const item: ItemDto = { id: randomUUID(), name: data.name, bought: false };
     this.items.push(item);

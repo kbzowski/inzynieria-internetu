@@ -467,3 +467,76 @@ GET /items?bought=abc&sort=price
 
 Komunikaty w języku polskim mają tylko reguły, którym podałem własny tekst. Pozostałe są domyślnymi
 komunikatami Zoda po angielsku.
+
+## Krok 6 – błędy reguł i kody błędów
+
+Dane mogą być poprawne, a operacja i tak niedozwolona. Serwis pilnuje teraz dwóch reguł:
+
+- na liście nie może być dwóch produktów o tej samej nazwie,
+- lista ma najwyżej 50 produktów (stała `MAX_ITEMS` w `items.service.ts`, w kroku 8 przejdzie do konfiguracji).
+
+Oba przypadki kończą się kodem 409 Conflict: zapytanie jest poprawne, ale kłóci się z obecnym
+stanem danych. Klient nie powinien zgadywać, która reguła zadziałała, na podstawie treści komunikatu,
+bo tekst może się zmienić albo zostać przetłumaczony. Dlatego wyjątek dostaje stały kod błędu
+`errorCode` (nowość w Nest 12):
+
+```ts
+throw new ConflictException(`Produkt ${name} jest już na liście`, {
+  errorCode: 'ITEM_EXISTS',
+});
+```
+
+```
+POST /items  { "name": "Mleko" }
+HTTP/1.1 409 Conflict
+{"message":"Produkt Mleko jest już na liście","error":"Conflict","statusCode":409,"errorCode":"ITEM_EXISTS"}
+```
+
+Przy pełnej liście kod to `ITEM_LIMIT`. Frontend może sprawdzić `errorCode` i pokazać przy polu
+nazwy właściwą podpowiedź.
+
+Nazwy porównuję dokładnie, po obcięciu spacji przez schemat. „Mleko” i „mleko” to dla API dwa różne
+produkty. Ta sama reguła zadziała później w bazie danych bez dodatkowego kodu.
+
+Sprawdzenie nazwy jest w prywatnej metodzie `checkNameIsFree`, bo potrzebują go `create` i `update`.
+`update` sprawdza nazwę tylko wtedy, gdy się zmienia, więc `PATCH` z `{ "name": "Mleko", "bought": true }`
+dla samego Mleka przechodzi, a dla Chleba kończy się 409. Repozytorium dostało do tego
+`findByName(name)` i `count()`.
+
+### Log
+
+Serwis zapisuje w logu każde dodanie produktu. `Logger` z Nesta dopisuje do wpisu kontekst podany w konstruktorze (tu nazwę klasy),
+a obiekt podany po komunikacie trafia do tego samego wpisu jako parametry:
+
+```ts
+private readonly logger = new Logger(ItemsService.name);
+...
+this.logger.log('Item created', { id: item.id, name: item.name });
+```
+
+```
+[Nest] 121052  - 11.11.2026, 10:37:26     LOG [ItemsService] Item created { id: '655c7901-8714-4500-8579-66a505786d88', name: 'mleko' }
+```
+
+### Błędy, których nikt nie przewidział
+
+Wyjątki HTTP (`NotFoundException`, `ConflictException` i inne) Nest zamienia na odpowiedź
+z ich kodem i treścią. Każdy inny wyjątek, np. błąd w kodzie albo brak dostępu do pliku, kończy się
+odpowiedzią 500 bez szczegółów, a pełny opis ze stosem wywołań trafia tylko do logu:
+
+```
+HTTP/1.1 500 Internal Server Error
+{"statusCode":500,"message":"Internal server error"}
+```
+
+```
+ERROR [ExceptionsHandler] Error: Nie mozna odczytac pliku ...
+    at ItemsService.findAll (file:///.../dist/items/items.service.js:20:28)
+```
+
+Klient nie powinien widzieć ścieżek plików ani fragmentów kodu serwera, bo ułatwiają one atak.
+To zachowanie daje wbudowany filtr wyjątków Nesta, więc nie trzeba pisać własnego. Wyjątków HTTP,
+takich jak 404 i 409, filtr nie zapisuje w logu, bo są zwykłą odpowiedzią na złe zapytanie.
+
+Powyższy log pochodzi z próby, w której na początku `findAll` w serwisie dopisałem na chwilę
+`throw new Error('Nie mozna odczytac pliku ...')`. Tak samo można wywołać ten błąd u siebie.
