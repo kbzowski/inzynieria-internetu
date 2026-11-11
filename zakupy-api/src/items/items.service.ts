@@ -8,6 +8,7 @@ import type {
   CreateItemDto,
   ItemDto,
   ItemsQueryDto,
+  ItemsSummaryDto,
   UpdateItemDto,
 } from './item.dto.js';
 import { ItemsRepository } from './items.repository.js';
@@ -30,6 +31,13 @@ export class ItemsService {
       throw new NotFoundException(`Nie ma produktu ${id}`);
     }
     return item;
+  }
+
+  summary(): ItemsSummaryDto {
+    return {
+      total: this.repository.count(),
+      left: this.repository.count(false),
+    };
   }
 
   create(data: CreateItemDto): ItemDto {

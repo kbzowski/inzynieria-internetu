@@ -540,3 +540,51 @@ takich jak 404 i 409, filtr nie zapisuje w logu, bo są zwykłą odpowiedzią na
 
 Powyższy log pochodzi z próby, w której na początku `findAll` w serwisie dopisałem na chwilę
 `throw new Error('Nie mozna odczytac pliku ...')`. Tak samo można wywołać ten błąd u siebie.
+
+## Krok 7 – kolejność tras
+
+Dochodzi `GET /items/summary`, które zwraca liczbę wszystkich produktów i tych, które zostały
+do kupienia:
+
+```json
+{ "total": 3, "left": 2 }
+```
+
+W kontrolerze metoda `summary` jest celowo zdefiniowana po `findOne`, czyli po `@Get(':id')`.
+Bez dodatkowych ustawień takie zapytanie kończy się błędem:
+
+```
+GET /items/summary
+{"message":["Invalid UUID"],"error":"Bad Request","statusCode":400}
+```
+
+Express sprawdza trasy w kolejności, w jakiej zostały zarejestrowane, a Nest rejestruje je
+w kolejności metod w klasie. `/items/:id` pasuje do `/items/summary` (wtedy `id` to tekst `summary`),
+więc zapytanie trafia do `findOne`, a schemat odrzuca `summary` jako identyfikator. Trasa `summary`
+jest zasłonięta i nigdy się nie wykona.
+
+Nest 12 ma na to dwie opcje. Podaje się je przy tworzeniu aplikacji, więc trafiają do obiektu
+`appOptions` w `app.setup.ts`, który `main.ts` przekazuje do `NestFactory.create`:
+
+```ts
+export const appOptions: NestApplicationOptions = {
+  routeConflictPolicy: { shadow: 'warn' },
+  routeResolutionStrategy: 'specificity',
+};
+```
+
+`routeConflictPolicy: { shadow: 'warn' }` wypisuje przy starcie ostrzeżenie o każdej zasłoniętej trasie:
+
+```
+WARN [NestApplication] Route GET /items/summary (ItemsController#summary) is shadowed by GET /items/:id (ItemsController#findOne). The first-registered route will match all matching requests on order-sensitive adapters.
+```
+
+`routeResolutionStrategy: 'specificity'` rejestruje trasy od najbardziej szczegółowych: stały
+fragment `summary` przed parametrem `:id`. Z tą opcją `GET /items/summary` działa niezależnie
+od kolejności metod, a ostrzeżenia już nie ma, bo nic nie jest zasłonięte.
+
+W tej gałęzi obie opcje są już włączone. Błąd 400 widać po usunięciu obu linii z `appOptions`,
+a samo ostrzeżenie po usunięciu tylko `routeResolutionStrategy`.
+
+Bez tych opcji trzeba pamiętać, żeby trasy ze stałym fragmentem pisać przed trasami z parametrem.
+Obie opcje są domyślnie wyłączone, żeby starsze aplikacje działały tak jak wcześniej.

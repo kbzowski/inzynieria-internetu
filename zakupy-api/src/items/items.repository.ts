@@ -44,8 +44,8 @@ export class ItemsRepository {
     return this.items.find((item) => item.name === name);
   }
 
-  count(): number {
-    return this.items.length;
+  count(bought?: boolean): number {
+    return this.findAll({ bought }).length;
   }
 
   create(data: CreateItemDto): ItemDto {

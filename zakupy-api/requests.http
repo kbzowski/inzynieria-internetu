@@ -77,3 +77,6 @@ PATCH {{baseUrl}}/items/22222222-2222-4222-8222-222222222222
 Content-Type: application/json
 
 { "name": "Mleko" }
+
+### Podsumowanie listy
+GET {{baseUrl}}/items/summary

@@ -34,6 +34,12 @@ export class ItemsController {
     return this.itemsService.findOne(id);
   }
 
+  // celowo za ':id', zeby pokazac zasloniecie trasy (opis w README, krok 7)
+  @Get('summary')
+  summary() {
+    return this.itemsService.summary();
+  }
+
   @Post()
   create(@Body({ schema: createItemSchema }) data: CreateItemDto) {
     return this.itemsService.create(data);

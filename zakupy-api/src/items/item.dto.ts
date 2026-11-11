@@ -28,3 +28,8 @@ export const itemsQuerySchema = z.object({
   sort: z.enum(['name', '-name']).optional(),
 });
 export type ItemsQueryDto = z.infer<typeof itemsQuerySchema>;
+
+export type ItemsSummaryDto = {
+  total: number;
+  left: number;
+};
