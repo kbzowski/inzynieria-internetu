@@ -12,7 +12,14 @@ const sampleItems: ItemDto[] = [
 export class ItemsRepository {
   private items: ItemDto[] = [...sampleItems];
 
-  findAll(): ItemDto[] {
-    return this.items;
+  findAll(bought?: boolean): ItemDto[] {
+    if (bought === undefined) {
+      return this.items;
+    }
+    return this.items.filter((item) => item.bought === bought);
+  }
+
+  findById(id: string): ItemDto | undefined {
+    return this.items.find((item) => item.id === id);
   }
 }

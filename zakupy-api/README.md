@@ -180,3 +180,74 @@ Odpowiedź na `GET /items`:
 
 Identyfikatory przykładowych produktów są stałe, żeby łatwo było je wpisywać w kolejnych krokach.
 Mają format UUID, tak jak identyfikatory w `lista-zakupow`.
+
+## Krok 3 – odczyt jednego produktu i filtr
+
+Dochodzą dwa sposoby przekazania danych w adresie:
+
+- parametr ścieżki (path param): `GET /items/11111111-...` wskazuje jeden konkretny zasób,
+- parametr zapytania (query param): `GET /items?bought=false` zawęża kolekcję, a bez niego dostajemy całą listę.
+
+W kontrolerze odczytują je dekoratory `@Param` i `@Query`:
+
+```ts
+@Get()
+findAll(
+  @Query('bought', new ParseBoolPipe({ optional: true })) bought?: boolean,
+) {
+  return this.itemsService.findAll(bought);
+}
+
+@Get(':id')
+findOne(@Param('id', ParseUUIDPipe) id: string) {
+  return this.itemsService.findOne(id);
+}
+```
+
+`:id` w `@Get(':id')` oznacza fragment adresu o dowolnej treści. Wszystko, co przychodzi w adresie,
+jest tekstem, także `false` w `?bought=false`. Zamianą i sprawdzeniem zajmują się pipe'y (pipes),
+czyli klasy, które Nest uruchamia na parametrze przed wywołaniem metody:
+
+- `ParseBoolPipe` zamienia tekst `true` albo `false` na wartość logiczną. Opcja `optional: true`
+  pozwala pominąć parametr, wtedy `bought` ma wartość `undefined`,
+- `ParseUUIDPipe` sprawdza, czy identyfikator ma format UUID.
+
+Gdy pipe odrzuci wartość, metoda kontrolera w ogóle się nie wykonuje, a klient dostaje 400:
+
+```
+GET /items?bought=abc
+{"message":"Validation failed (boolean string is expected)","error":"Bad Request","statusCode":400}
+
+GET /items/123
+{"message":"Validation failed (uuid is expected)","error":"Bad Request","statusCode":400}
+```
+
+Repozytorium dostaje `findById(id)` i filtr w `findAll(bought)`. Brak produktu to reguła
+aplikacji, więc sprawdza go serwis:
+
+```ts
+findOne(id: string): ItemDto {
+  const item = this.repository.findById(id);
+  if (!item) {
+    throw new NotFoundException(`Nie ma produktu ${id}`);
+  }
+  return item;
+}
+```
+
+`NotFoundException` to wyjątek HTTP z Nesta. Nest łapie go i odsyła odpowiedź 404:
+
+```
+GET /items/99999999-9999-4999-8999-999999999999
+{"message":"Nie ma produktu 99999999-9999-4999-8999-999999999999","error":"Not Found","statusCode":404}
+```
+
+Serwis rzuca tu wyjątek HTTP, choć według tabeli z kroku 2 kody odpowiedzi należą do kontrolera.
+To uproszczenie typowe dla Nesta: wyjątek z kodem HTTP można rzucić w dowolnej warstwie, a Nest
+zamieni go na odpowiedź.
+
+Zły format identyfikatora i brak produktu to dwie różne sytuacje. `123` nie może być
+identyfikatorem żadnego produktu, więc to błąd klienta (400). Poprawny UUID, pod którym nic nie ma,
+to brak zasobu (404).
+
+W `requests.http` są zapytania dla wszystkich tych przypadków.

@@ -2,3 +2,18 @@
 
 ### Lista produktów
 GET {{baseUrl}}/items
+
+### Tylko produkty do kupienia
+GET {{baseUrl}}/items?bought=false
+
+### Zła wartość parametru (400)
+GET {{baseUrl}}/items?bought=abc
+
+### Jeden produkt
+GET {{baseUrl}}/items/11111111-1111-4111-8111-111111111111
+
+### Produkt, którego nie ma (404)
+GET {{baseUrl}}/items/99999999-9999-4999-8999-999999999999
+
+### Identyfikator w złym formacie (400)
+GET {{baseUrl}}/items/123
