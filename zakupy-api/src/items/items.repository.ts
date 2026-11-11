@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import type { CreateItemDto, ItemDto, UpdateItemDto } from './item.dto.js';
+import type {
+  CreateItemDto,
+  ItemDto,
+  ItemsQueryDto,
+  UpdateItemDto,
+} from './item.dto.js';
 
 const sampleItems: ItemDto[] = [
   { id: '11111111-1111-4111-8111-111111111111', name: 'Mleko', bought: false },
@@ -13,11 +18,22 @@ const sampleItems: ItemDto[] = [
 export class ItemsRepository {
   private items: ItemDto[] = [...sampleItems];
 
-  findAll(bought?: boolean): ItemDto[] {
-    if (bought === undefined) {
-      return this.items;
+  findAll(query: ItemsQueryDto): ItemDto[] {
+    let result = this.items;
+    if (query.bought !== undefined) {
+      result = result.filter((item) => item.bought === query.bought);
     }
-    return this.items.filter((item) => item.bought === bought);
+    if (query.q !== undefined) {
+      const q = query.q.toLowerCase();
+      result = result.filter((item) => item.name.toLowerCase().includes(q));
+    }
+    if (query.sort === 'name') {
+      result = result.toSorted((a, b) => a.name.localeCompare(b.name, 'pl'));
+    }
+    if (query.sort === '-name') {
+      result = result.toSorted((a, b) => b.name.localeCompare(a.name, 'pl'));
+    }
+    return result;
   }
 
   findById(id: string): ItemDto | undefined {

@@ -4,7 +4,7 @@ Serwer z REST API dla listy zakupów. W kolejnych krokach rośnie od jednego pli
 z bazą danych, logowaniem i testami. Produkt ma ten sam kształt co w projekcie `lista-zakupow`
 (`id`, `name`, `bought`), więc później frontend będzie mógł korzystać z tego API.
 
-Wersje: Node 24, npm 11, NestJS 12.4, @nestjs/cli 12.0, TypeScript 6.0.
+Wersje: Node 24, npm 11, NestJS 12.4, @nestjs/cli 12.0, TypeScript 6.0, Zod 4.6.
 
 ## Uruchomienie
 
@@ -337,3 +337,133 @@ wszystkich pól od klienta nazywa się masowym przypisaniem (mass assignment). W
 w ten sposób można np. nadać sobie rolę administratora.
 
 Dane od klienta trzeba więc sprawdzać w czasie działania programu. Zajmuje się tym kolejny krok.
+
+## Krok 5 – walidacja biblioteką Zod, wyszukiwanie i sortowanie
+
+Dane od klienta sprawdzam schematami biblioteki Zod (`npm install -E zod`). Schemat opisuje,
+jak dane mają wyglądać, i sprawdza je w czasie działania programu. Nest 12 przyjmuje taki schemat
+bezpośrednio w dekoratorze parametru:
+
+```ts
+@Post()
+create(@Body({ schema: createItemSchema }) data: CreateItemDto) {
+  return this.itemsService.create(data);
+}
+```
+
+Sam dekorator tylko zapamiętuje schemat. Sprawdza go `StandardSchemaValidationPipe`, który włączam
+dla całej aplikacji w nowym pliku `src/app.setup.ts`:
+
+```ts
+export function configureApp(app: INestApplication) {
+  app.useGlobalPipes(new StandardSchemaValidationPipe());
+}
+```
+
+`main.ts` woła `configureApp(app)` zaraz po utworzeniu aplikacji. Ustawienia są w osobnej funkcji,
+bo w krokach z testami ta sama funkcja przygotuje aplikację testową. Nazwa pipe'a pochodzi
+od Standard Schema, wspólnego interfejsu bibliotek walidacji. Zod go obsługuje, więc Nest nie musi
+znać samej biblioteki.
+
+### Schematy w `item.dto.ts`
+
+```ts
+export const itemSchema = z.object({
+  id: z.uuid(),
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Wpisz nazwę produktu')
+    .max(50, 'Nazwa może mieć najwyżej 50 znaków'),
+  bought: z.boolean(),
+});
+export type ItemDto = z.infer<typeof itemSchema>;
+
+export const createItemSchema = itemSchema.pick({ name: true });
+export type CreateItemDto = z.infer<typeof createItemSchema>;
+
+export const updateItemSchema = itemSchema
+  .pick({ name: true, bought: true })
+  .partial();
+export type UpdateItemDto = z.infer<typeof updateItemSchema>;
+```
+
+`z.infer` wyprowadza typ TypeScriptu ze schematu. Typy DTO mają te same nazwy co w kroku 4,
+ale nie trzeba już ich pisać ręcznie i nie da się zapomnieć o zmianie typu po zmianie reguł.
+`pick` wybiera pola z większego schematu, a `partial` robi wszystkie pola opcjonalnymi.
+Reguły nazwy (obcięcie spacji, od 1 do 50 znaków, komunikaty) są takie same jak w schemacie
+`itemSchema` w projekcie `lista-zakupow`.
+
+Zapytania, które w kroku 4 przechodziły, teraz kończą się błędem 400 z listą problemów:
+
+```
+POST /items  { "name": 42 }
+{"message":["name: Invalid input: expected string, received number"],"error":"Bad Request","statusCode":400}
+
+POST /items  { "name": "   " }
+{"message":["name: Wpisz nazwę produktu"],"error":"Bad Request","statusCode":400}
+```
+
+Schemat obiektu przepuszcza tylko pola, które opisuje, a nieznane pomija. `PATCH` z treścią
+`{ "id": "abc", "admin": true }` nie zmienia już produktu, bo do serwisu trafia pusty obiekt.
+Tak walidacja zamyka masowe przypisanie z kroku 4. Zod przy okazji zamienia dane: `"  Ser  "`
+zostaje zapisane jako `"Ser"`.
+
+Bez nagłówka `Content-Type: application/json` Nest nie odczyta treści jako JSON. Gdy treści nie ma
+albo ma inny typ, np. `text/plain`, schemat dostaje `undefined` zamiast obiektu:
+
+```
+{"message":["Invalid input: expected object, received undefined"],"error":"Bad Request","statusCode":400}
+```
+
+`curl -d` bez `-H` wysyła dane jako formularz. Odpowiedź mówi wtedy
+`name: Invalid input: expected string, received undefined`, choć nazwa była w wysłanym tekście.
+
+### Parametry w adresie
+
+Schematy zastępują też pipe'y z kroku 3. Dla całego obiektu parametrów zapytania wystarczy jeden schemat:
+
+```ts
+export const itemsQuerySchema = z.object({
+  q: z.string().trim().min(1).optional(),
+  bought: z.stringbool().optional(),
+  sort: z.enum(['name', '-name']).optional(),
+});
+
+export const itemIdSchema = z.uuid();
+```
+
+```ts
+@Get()
+findAll(@Query({ schema: itemsQuerySchema }) query: ItemsQueryDto) {
+  return this.itemsService.findAll(query);
+}
+
+@Get(':id')
+findOne(@Param('id', { schema: itemIdSchema }) id: string) {
+  return this.itemsService.findOne(id);
+}
+```
+
+Dla `GET /items/123` odpowiedź ma teraz postać `{"message":["Invalid UUID"],"error":"Bad Request","statusCode":400}`.
+`@Query` bez nazwy parametru daje obiekt ze wszystkimi parametrami zapytania. Doszły dwa nowe:
+
+- `q` – fragment nazwy, wielkość liter nie ma znaczenia: `GET /items?q=le` znajduje Mleko i Chleb,
+- `sort` – `name` sortuje po nazwie rosnąco, `-name` malejąco, a bez parametru produkty są w kolejności dodania.
+
+Parametry można łączyć: `GET /items?bought=false&sort=name`. Filtrowanie i sortowanie robi
+repozytorium w `findAll(query)`. Wyszukiwanie zamienia obie nazwy na małe litery (`toLowerCase()`).
+Sortowanie używa `localeCompare(..., 'pl')`, które porównuje teksty według zasad języka polskiego.
+Zwykłe porównanie kodów znaków ustawiłoby polskie litery za wszystkimi łacińskimi, np. „Łosoś”
+za „Woda”. `toSorted` zwraca posortowaną kopię i nie zmienia tablicy w repozytorium.
+
+`z.stringbool()` zamienia tekst na wartość logiczną. Przyjmuje więcej słów niż `true` i `false`,
+co widać w komunikacie błędu:
+
+```
+GET /items?bought=abc&sort=price
+{"message":["bought: Invalid option: expected one of \"true\"|\"1\"|\"yes\"|\"on\"|\"y\"|\"enabled\"|\"false\"|\"0\"|\"no\"|\"off\"|\"n\"|\"disabled\"","sort: Invalid option: expected one of \"name\"|\"-name\""],"error":"Bad Request","statusCode":400}
+```
+
+Komunikaty w języku polskim mają tylko reguły, którym podałem własny tekst. Pozostałe są domyślnymi
+komunikatami Zoda po angielsku.

@@ -6,8 +6,17 @@ GET {{baseUrl}}/items
 ### Tylko produkty do kupienia
 GET {{baseUrl}}/items?bought=false
 
-### Zła wartość parametru (400)
-GET {{baseUrl}}/items?bought=abc
+### Wyszukiwanie po fragmencie nazwy
+GET {{baseUrl}}/items?q=le
+
+### Sortowanie po nazwie malejąco
+GET {{baseUrl}}/items?sort=-name
+
+### Kilka parametrów naraz
+GET {{baseUrl}}/items?bought=false&sort=name
+
+### Złe wartości parametrów (400)
+GET {{baseUrl}}/items?bought=abc&sort=price
 
 ### Jeden produkt
 GET {{baseUrl}}/items/11111111-1111-4111-8111-111111111111
@@ -33,20 +42,26 @@ Content-Type: application/json
 ### Usunięcie produktu (204)
 DELETE {{baseUrl}}/items/33333333-3333-4333-8333-333333333333
 
-### Problem: nazwa jako liczba też zostaje zapisana
+### Nazwa jako liczba (400)
 POST {{baseUrl}}/items
 Content-Type: application/json
 
 { "name": 42 }
 
-### Problem: brak nazwy też zostaje zapisany
+### Brak nazwy (400)
 POST {{baseUrl}}/items
 Content-Type: application/json
 
 {}
 
-### Problem: PATCH podmienia identyfikator
+### Nadmiarowe pola w PATCH są pomijane (200, produkt bez zmian)
 PATCH {{baseUrl}}/items/22222222-2222-4222-8222-222222222222
 Content-Type: application/json
 
 { "id": "abc", "admin": true }
+
+### Pusta nazwa po obcięciu spacji (400)
+POST {{baseUrl}}/items
+Content-Type: application/json
+
+{ "name": "   " }

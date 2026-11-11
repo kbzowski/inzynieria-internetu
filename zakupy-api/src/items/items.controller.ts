@@ -5,13 +5,19 @@ import {
   Get,
   HttpCode,
   Param,
-  ParseBoolPipe,
-  ParseUUIDPipe,
   Patch,
   Post,
   Query,
 } from '@nestjs/common';
-import type { CreateItemDto, UpdateItemDto } from './item.dto.js';
+import {
+  createItemSchema,
+  itemIdSchema,
+  itemsQuerySchema,
+  updateItemSchema,
+  type CreateItemDto,
+  type ItemsQueryDto,
+  type UpdateItemDto,
+} from './item.dto.js';
 import { ItemsService } from './items.service.js';
 
 @Controller('items')
@@ -19,30 +25,31 @@ export class ItemsController {
   constructor(private readonly itemsService: ItemsService) {}
 
   @Get()
-  findAll(
-    @Query('bought', new ParseBoolPipe({ optional: true })) bought?: boolean,
-  ) {
-    return this.itemsService.findAll(bought);
+  findAll(@Query({ schema: itemsQuerySchema }) query: ItemsQueryDto) {
+    return this.itemsService.findAll(query);
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
+  findOne(@Param('id', { schema: itemIdSchema }) id: string) {
     return this.itemsService.findOne(id);
   }
 
   @Post()
-  create(@Body() data: CreateItemDto) {
+  create(@Body({ schema: createItemSchema }) data: CreateItemDto) {
     return this.itemsService.create(data);
   }
 
   @Patch(':id')
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() data: UpdateItemDto) {
+  update(
+    @Param('id', { schema: itemIdSchema }) id: string,
+    @Body({ schema: updateItemSchema }) data: UpdateItemDto,
+  ) {
     return this.itemsService.update(id, data);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  remove(@Param('id', ParseUUIDPipe) id: string) {
+  remove(@Param('id', { schema: itemIdSchema }) id: string) {
     this.itemsService.remove(id);
   }
 }

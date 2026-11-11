@@ -1,13 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { CreateItemDto, ItemDto, UpdateItemDto } from './item.dto.js';
+import type {
+  CreateItemDto,
+  ItemDto,
+  ItemsQueryDto,
+  UpdateItemDto,
+} from './item.dto.js';
 import { ItemsRepository } from './items.repository.js';
 
 @Injectable()
 export class ItemsService {
   constructor(private readonly repository: ItemsRepository) {}
 
-  findAll(bought?: boolean): ItemDto[] {
-    return this.repository.findAll(bought);
+  findAll(query: ItemsQueryDto): ItemDto[] {
+    return this.repository.findAll(query);
   }
 
   findOne(id: string): ItemDto {
