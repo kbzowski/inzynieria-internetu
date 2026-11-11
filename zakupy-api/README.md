@@ -4,7 +4,7 @@ Serwer z REST API dla listy zakupów. W kolejnych krokach rośnie od jednego pli
 z bazą danych, logowaniem i testami. Produkt ma ten sam kształt co w projekcie `lista-zakupow`
 (`id`, `name`, `bought`), więc później frontend będzie mógł korzystać z tego API.
 
-Wersje: Node 24, npm 11, NestJS 12.4, @nestjs/cli 12.0, TypeScript 6.0, Zod 4.6.
+Wersje: Node 24, npm 11, NestJS 12.4, @nestjs/cli 12.0, @nestjs/swagger 12.1, TypeScript 6.0, Zod 4.6.
 
 ## Uruchomienie
 
@@ -666,3 +666,81 @@ już pierwsze dodanie produktu (trzy są przykładowe) dostaje odpowiedź 409 z 
 Nest ma do konfiguracji pakiet `@nestjs/config`, który też potrafi sprawdzić zmienne schematem Zod.
 Tutaj wystarcza jeden plik bez dodatkowego pakietu, a obiekt `env` można zaimportować także
 w `main.ts`, zanim powstanie aplikacja.
+
+## Krok 9 – CORS i dokumentacja API
+
+### CORS
+
+Frontend z projektu `lista-zakupow` działa pod `http://localhost:5173`, a API pod
+`http://localhost:3000`. Pochodzenie (origin) to schemat, host i port adresu, więc inny port oznacza
+inne pochodzenie. Przeglądarka stosuje regułę tego samego pochodzenia (same-origin policy), według
+której skrypt strony nie może czytać odpowiedzi z innego pochodzenia. Serwer może na to pozwolić
+nagłówkiem `Access-Control-Allow-Origin`. Ten mechanizm nazywa się CORS (Cross-Origin Resource Sharing).
+
+W `configureApp` dochodzi jedna linia, a adres frontendu trafia do konfiguracji jako `FRONTEND_URL`
+(schemat sprawdza go przez `z.url()`):
+
+```ts
+app.enableCors({ origin: env.FRONTEND_URL });
+```
+
+Do własnego pliku `.env` z kroku 8 trzeba dopisać `FRONTEND_URL=http://localhost:5173`, inaczej start
+zakończy się błędem konfiguracji. Adres musi być bez ukośnika na końcu, bo przeglądarka porównuje
+nagłówek z pochodzeniem strony znak po znaku.
+
+Zapytanie z nagłówkiem `Origin`, takim jak wysyła przeglądarka:
+
+```bash
+curl -i -H "Origin: http://localhost:5173" http://localhost:3000/items
+```
+
+```
+HTTP/1.1 200 OK
+Access-Control-Allow-Origin: http://localhost:5173
+...
+```
+
+Przed zapytaniem `POST` z treścią JSON przeglądarka najpierw pyta serwer, czy może je wysłać.
+To zapytanie wstępne (preflight) z metodą `OPTIONS`. Nest odpowiada na nie sam, nie trzeba pisać
+osobnej trasy:
+
+```bash
+curl -i -X OPTIONS -H "Origin: http://localhost:5173" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: content-type" http://localhost:3000/items
+```
+
+```
+HTTP/1.1 204 No Content
+Access-Control-Allow-Origin: http://localhost:5173
+Access-Control-Allow-Methods: GET,HEAD,PUT,PATCH,POST,DELETE
+Access-Control-Allow-Headers: content-type
+...
+```
+
+Dla zapytania z `Origin: http://example.com` serwer też wykonuje zapytanie i odpowiada 200 z danymi,
+a nagłówek dalej wskazuje `http://localhost:5173`. Przeglądarka blokuje dopiero odczyt odpowiedzi
+przez stronę z `example.com`. Proste zapytanie, np. `GET`, dociera więc do serwera mimo CORS.
+Reguła tego samego pochodzenia chroni użytkownika przeglądarki przed obcą stroną. Serwera nie chroni,
+bo `curl`, Postman czy inny serwer pobiorą dane bez przeszkód.
+
+### Dokumentacja API
+
+Pakiet `@nestjs/swagger` (`npm install -E @nestjs/swagger`) tworzy opis API w formacie OpenAPI
+i stronę, na której można przeglądać i wywoływać trasy:
+
+```ts
+const config = new DocumentBuilder().setTitle('Zakupy API').build();
+SwaggerModule.setup('docs', app, () =>
+  SwaggerModule.createDocument(app, config),
+);
+```
+
+Strona jest pod `http://localhost:3000/docs`, a sam opis w JSON pod `http://localhost:3000/docs-json`.
+Swagger odczytuje trasy z dekoratorów kontrolera, a pola i ograniczenia ze schematów Zod przekazanych
+w `@Body`, `@Param` i `@Query`. Dla `POST /items` opis treści wygląda tak:
+
+```json
+{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":50}},"required":["name"]}
+```
+
+Odpowiedzi nie mają w opisie schematu, bo kontroler nie podaje ich przez dekoratory. Opis wejścia
+wystarcza, żeby z `/docs` wysłać każde zapytanie z tego projektu.

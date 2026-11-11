@@ -3,6 +3,7 @@ import { z } from 'zod';
 // zmienne srodowiskowe sa zawsze tekstem, z.coerce zamienia je na liczby
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
+  FRONTEND_URL: z.url(),
   MAX_ITEMS: z.coerce.number().int().positive(),
 });
 
