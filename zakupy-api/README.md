@@ -251,3 +251,89 @@ identyfikatorem żadnego produktu, więc to błąd klienta (400). Poprawny UUID,
 to brak zasobu (404).
 
 W `requests.http` są zapytania dla wszystkich tych przypadków.
+
+## Krok 4 – dodawanie, zmiana i usuwanie
+
+Zasób to nadal `/items`, a operację wybiera metoda HTTP:
+
+| zapytanie | działanie | odpowiedź |
+|---|---|---|
+| `POST /items` | dodaje produkt | 201 Created i nowy produkt |
+| `PATCH /items/:id` | zmienia wybrane pola | 200 OK i produkt po zmianie |
+| `DELETE /items/:id` | usuwa produkt | 204 No Content, bez treści |
+
+Dane nowego produktu przychodzą w treści zapytania (body) jako JSON. Opisują je dwa nowe typy
+w `item.dto.ts`:
+
+```ts
+export type CreateItemDto = {
+  name: string;
+};
+
+export type UpdateItemDto = {
+  name?: string;
+  bought?: boolean;
+};
+```
+
+`CreateItemDto` ma tylko nazwę, bo identyfikator nadaje serwer (`randomUUID()` z modułu `node:crypto`),
+a nowy produkt jest zawsze niekupiony. W `UpdateItemDto` oba pola są opcjonalne, bo `PATCH` zmienia
+tylko to, co klient przyśle.
+
+Kontroler odczytuje treść przez `@Body()`:
+
+```ts
+@Post()
+create(@Body() data: CreateItemDto) {
+  return this.itemsService.create(data);
+}
+
+@Delete(':id')
+@HttpCode(204)
+remove(@Param('id', ParseUUIDPipe) id: string) {
+  this.itemsService.remove(id);
+}
+```
+
+`POST` domyślnie odpowiada kodem 201, a pozostałe metody kodem 200. Usunięcie nie ma czego zwrócić,
+więc `@HttpCode(204)` zmienia kod na 204 No Content.
+
+Typy DTO kontroler importuje przez `import type`. Taki import dotyczy tylko TypeScriptu i znika
+po kompilacji. W kontrolerze jest wymagany: zwykły `import` typu użytego przy parametrze z dekoratorem
+kończy się błędem kompilacji TS1272, bo w tym projekcie kompilator zapisuje typy parametrów
+dla Nesta, a sam typ nie istnieje w czasie działania programu.
+
+Przed zmianą i usunięciem serwis woła `findOne(id)`, które rzuca 404, gdy produktu nie ma.
+Drugie `DELETE` tego samego produktu kończy się więc kodem 404, ale stan serwera jest taki sam
+jak po pierwszym. Metodę, której powtórzenie daje ten sam stan serwera co jedno wywołanie,
+nazywa się idempotentną, nawet jeśli kody odpowiedzi się różnią. `POST` nie jest idempotentny,
+bo każde wywołanie dodaje kolejny produkt.
+
+W repozytorium dochodzą `create`, `update` i `remove`. `update` skleja stary produkt z przysłanymi
+polami: `{ ...this.items[index], ...data }`. Operator `...` (spread) kopiuje pola obiektu, a pola
+z `data` nadpisują stare.
+
+### Problem: typ nie sprawdza danych
+
+Typ `CreateItemDto` istnieje tylko dla TypeScriptu. Po kompilacji znika, a do serwera przychodzi
+zwykłe zapytanie HTTP, w którym może być cokolwiek. Trzy ostatnie zapytania w `requests.http`
+to pokazują:
+
+```
+POST /items  { "name": 42 }
+{"id":"271c6ae0-...","name":42,"bought":false}
+
+POST /items  {}
+{"id":"3f90ed39-...","bought":false}
+
+PATCH /items/22222222-2222-4222-8222-222222222222  { "id": "abc", "admin": true }
+{"id":"abc","name":"Chleb","bought":true,"admin":true}
+```
+
+Serwer zapisał nazwę, która jest liczbą, i produkt bez nazwy. `PATCH` skopiował do produktu
+wszystkie przysłane pola, także `id` i nieznane `admin`. Po tej zmianie produktu nie da się już
+pobrać ani usunąć, bo `abc` nie przechodzi przez `ParseUUIDPipe`. Przepisanie do obiektu
+wszystkich pól od klienta nazywa się masowym przypisaniem (mass assignment). W prawdziwej aplikacji
+w ten sposób można np. nadać sobie rolę administratora.
+
+Dane od klienta trzeba więc sprawdzać w czasie działania programu. Zajmuje się tym kolejny krok.

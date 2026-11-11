@@ -17,3 +17,36 @@ GET {{baseUrl}}/items/99999999-9999-4999-8999-999999999999
 
 ### Identyfikator w złym formacie (400)
 GET {{baseUrl}}/items/123
+
+### Dodanie produktu (201)
+POST {{baseUrl}}/items
+Content-Type: application/json
+
+{ "name": "Masło" }
+
+### Oznaczenie produktu jako kupionego
+PATCH {{baseUrl}}/items/11111111-1111-4111-8111-111111111111
+Content-Type: application/json
+
+{ "bought": true }
+
+### Usunięcie produktu (204)
+DELETE {{baseUrl}}/items/33333333-3333-4333-8333-333333333333
+
+### Problem: nazwa jako liczba też zostaje zapisana
+POST {{baseUrl}}/items
+Content-Type: application/json
+
+{ "name": 42 }
+
+### Problem: brak nazwy też zostaje zapisany
+POST {{baseUrl}}/items
+Content-Type: application/json
+
+{}
+
+### Problem: PATCH podmienia identyfikator
+PATCH {{baseUrl}}/items/22222222-2222-4222-8222-222222222222
+Content-Type: application/json
+
+{ "id": "abc", "admin": true }
