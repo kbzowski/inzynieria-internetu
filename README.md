@@ -9,8 +9,10 @@ tylko ten opis.
 | `licznik` | komponent, propsy, stan, zdarzenia w React | `licznik/01-szkielet` … `licznik/05-stan` |
 | `lista-zakupow` | kilka komponentów, stan w rodzicu, listy, formularz, własny hook, TanStack Form i Zod, zapis w localStorage | `lista-zakupow/01-szkielet` … `lista-zakupow/10-localstorage` |
 | `notatki` | TanStack Start: routing z plików, loadery, funkcje serwerowe, parametry w adresie | `notatki/01-szkielet` … `notatki/06-wyszukiwarka` |
+| `zakupy-api` | REST API w NestJS 12: warstwy, walidacja Zod, kody błędów, konfiguracja, CORS, Swagger, baza SQLite przez Prismę, logowanie z JWT i refresh tokenem, testy | `zakupy-api/01-szkielet` … `zakupy-api/15-testy-api` |
 
-Projekty `licznik` i `lista-zakupow` to sam interfejs (React + Vite). `notatki` to aplikacja fullstack.
+Projekty `licznik` i `lista-zakupow` to sam interfejs (React + Vite). `notatki` to aplikacja fullstack. `zakupy-api`
+to sam serwer z REST API dla listy zakupów, uruchamiany i sprawdzany zapytaniami z pliku `requests.http`.
 W kolejnych częściach kursu `notatki` dostaną walidację biblioteką Zod i logowanie.
 
 ## Jak korzystać
