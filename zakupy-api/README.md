@@ -10,6 +10,7 @@ Wersje: Node 24, npm 11, NestJS 12.4, @nestjs/cli 12.0, TypeScript 6.0, Zod 4.6.
 
 ```bash
 npm install          # instaluje zależności (po pobraniu projektu)
+cp .env.example .env # konfiguracja (od kroku 8), w wierszu poleceń cmd: copy .env.example .env
 npm run start:dev    # serwer z automatycznym restartem po zmianie kodu, http://localhost:3000
 npm run build        # kompilacja do katalogu dist i sprawdzenie typów
 npm run start:prod   # uruchomienie skompilowanej wersji z dist
@@ -588,3 +589,80 @@ a samo ostrzeżenie po usunięciu tylko `routeResolutionStrategy`.
 
 Bez tych opcji trzeba pamiętać, żeby trasy ze stałym fragmentem pisać przed trasami z parametrem.
 Obie opcje są domyślnie wyłączone, żeby starsze aplikacje działały tak jak wcześniej.
+
+## Krok 8 – konfiguracja w pliku `.env`
+
+Limit produktów był stałą w kodzie. Takie wartości zależą od miejsca, w którym działa aplikacja
+(inny port na serwerze, inny limit w testach), więc przenoszę je do zmiennych środowiskowych
+(environment variables). W czasie pracy na własnym komputerze ustawia je plik `.env`:
+
+```
+PORT=3000
+MAX_ITEMS=50
+```
+
+Plik `.env` jest w `.gitignore`, bo później trafią do niego hasła i klucze. W repozytorium jest
+`.env.example` z tymi samymi nazwami i przykładowymi wartościami. Po pobraniu projektu trzeba go
+skopiować do `.env`. Główny `.gitignore` repozytorium ignoruje wszystkie pliki `.env.*`, dlatego
+`.gitignore` projektu ma wyjątek `!.env.example`.
+
+Plik wczytuje Node opcją `--env-file`, dopisaną do skryptów w `package.json`:
+
+```json
+"start:dev": "nest start --watch --env-file .env",
+"start:prod": "node --env-file-if-exists=.env dist/main"
+```
+
+`nest start` i opcja `--env-file-if-exists` pomijają brakujący plik, bo na serwerze zmienne zwykle
+ustawia się inaczej niż plikiem. Tryb `--watch` nie śledzi pliku `.env`, więc po jego zmianie trzeba
+uruchomić serwer ponownie.
+
+Zmienne środowiskowe są zawsze tekstem, a brakująca zmienna ma wartość `undefined`:
+
+```bash
+MAX_ITEMS=5 node -e "const m = process.env.MAX_ITEMS; console.log(typeof m, m + 1)"
+string 51
+```
+
+Gdyby kod używał `process.env.MAX_ITEMS` bezpośrednio, literówka w `.env` nie dałaby żadnego błędu.
+Porównanie z `undefined` zawsze daje `false`, więc limit po cichu przestałby działać.
+Dlatego konfigurację sprawdza schemat w `src/env.ts`, zanim aplikacja wystartuje:
+
+```ts
+const envSchema = z.object({
+  PORT: z.coerce.number().int().positive().default(3000),
+  MAX_ITEMS: z.coerce.number().int().positive(),
+});
+
+const result = envSchema.safeParse(process.env);
+if (!result.success) {
+  console.error('Błędna konfiguracja w .env:');
+  console.error(z.prettifyError(result.error));
+  process.exit(1);
+}
+
+export const env = result.data;
+```
+
+`z.coerce.number()` zamienia tekst na liczbę. `safeParse` nie rzuca wyjątku, tylko zwraca wynik
+z polem `success`. `z.prettifyError` zamienia listę błędów na czytelny tekst. Przy złej konfiguracji
+proces kończy się od razu z listą wszystkich problemów:
+
+```
+Błędna konfiguracja w .env:
+✖ Invalid input: expected number, received NaN
+  → at PORT
+✖ Invalid input: expected number, received NaN
+  → at MAX_ITEMS
+```
+
+Tak wygląda wynik dla `PORT=x` i `MAX_ITEMS=abc`. Ten sam komunikat pojawia się, gdy zmiennej
+w ogóle nie ma, bo `Number(undefined)` to `NaN`.
+
+Reszta kodu importuje gotowy obiekt `env` z poprawnymi typami: `main.ts` uruchamia serwer
+na `env.PORT`, a serwis porównuje liczbę produktów z `env.MAX_ITEMS`. Z `MAX_ITEMS=3` w `.env`
+już pierwsze dodanie produktu (trzy są przykładowe) dostaje odpowiedź 409 z kodem `ITEM_LIMIT`.
+
+Nest ma do konfiguracji pakiet `@nestjs/config`, który też potrafi sprawdzić zmienne schematem Zod.
+Tutaj wystarcza jeden plik bez dodatkowego pakietu, a obiekt `env` można zaimportować także
+w `main.ts`, zanim powstanie aplikacja.

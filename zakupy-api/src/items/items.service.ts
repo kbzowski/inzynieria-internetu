@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { env } from '../env.js';
 import type {
   CreateItemDto,
   ItemDto,
@@ -12,8 +13,6 @@ import type {
   UpdateItemDto,
 } from './item.dto.js';
 import { ItemsRepository } from './items.repository.js';
-
-const MAX_ITEMS = 50;
 
 @Injectable()
 export class ItemsService {
@@ -41,7 +40,7 @@ export class ItemsService {
   }
 
   create(data: CreateItemDto): ItemDto {
-    if (this.repository.count() >= MAX_ITEMS) {
+    if (this.repository.count() >= env.MAX_ITEMS) {
       throw new ConflictException('Lista jest pełna', {
         errorCode: 'ITEM_LIMIT',
       });
