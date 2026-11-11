@@ -1267,3 +1267,74 @@ Dlatego konfiguracje są dwie, tak jak w pełnym szablonie Nesta:
 Repozytorium i kontroler nie mają testów jednostkowych. Repozytorium to same zapytania do bazy,
 więc sprawdza się je na prawdziwej bazie (krok 14). Kontroler tylko przekazuje dane dalej,
 a jego trasy sprawdzają testy całego API (krok 15).
+
+## Krok 14 – testy integracyjne repozytorium
+
+Repozytorium nie ma własnej logiki do sprawdzenia w oderwaniu od bazy: składa się z zapytań Prismy.
+Test z podstawionym klientem Prismy sprawdziłby tylko, czy wywołujemy jakąś metodę z jakimiś argumentami,
+a nie czy zapytanie zwraca właściwe wiersze. Dlatego repozytorium testuję na prawdziwej bazie SQLite.
+Test, który sprawdza współpracę kodu z czymś zewnętrznym (tu z bazą), nazywa się integracyjnym.
+
+Testy integracyjne są w katalogu `test`, osobno od jednostkowych.
+
+### Osobna baza testowa
+
+Testy nie mogą korzystać z `dev.db`, bo czyściłyby dane, na których pracuję. W `vitest.config.ts`
+zmienna `DATABASE_URL` wskazuje `file:./test.db` (ustawiłem ją już w kroku 13, bo `env.ts` wymaga jej przy każdym imporcie). Nowe ustawienia:
+
+```ts
+include: ['src/**/*.spec.ts', 'test/**/*.spec.ts'],
+globalSetup: 'test/global-setup.ts',
+fileParallelism: false,
+```
+
+`globalSetup` uruchamia raz, przed wszystkimi testami, funkcję z `test/global-setup.ts`. Ta funkcja
+wykonuje `prisma migrate deploy` na `test.db`, czyli tworzy bazę i jej tabele z plików migracji.
+W odróżnieniu od `migrate dev` polecenie `deploy` tylko wykonuje istniejące migracje i nie tworzy nowych.
+Zmienne z `test.env` nie działają w `globalSetup`, dlatego funkcja podaje adres bazy jeszcze raz.
+`fileParallelism: false` uruchamia pliki testów po kolei. Vitest domyślnie uruchamia je równolegle,
+a dwa pliki czyszczące tę samą bazę w tym samym czasie psułyby sobie nawzajem dane. Bez tej opcji
+testy zwykle też przechodzą, bo kolizja zdarza się rzadko. Błąd, który pojawia się tylko czasem,
+najtrudniej jednak znaleźć.
+
+Przed każdym testem baza jest pusta:
+
+```ts
+beforeEach(async () => {
+  await prisma.user.deleteMany();
+});
+```
+
+Usunięcie użytkowników usuwa też ich produkty i refresh tokeny (`onDelete: Cascade`). Każdy test
+sam tworzy dane, których potrzebuje, więc nie zależy od innych testów ani od ich kolejności.
+
+Repozytorium ma tylko jedną zależność, więc test tworzy je bez Nesta:
+
+```ts
+const prisma = new PrismaService();
+const repository = new ItemsRepository(prisma);
+```
+
+### Co sprawdzają testy
+
+- kolejność dodania: `uuid(7)` i sortowanie po `id` dają produkty w kolejności, w jakiej powstały,
+- cudze produkty: `findAll`, `findById`, `findByName` i `count` innego użytkownika nie widzą produktu Ali,
+- kształt danych: produkt z repozytorium ma tylko `id`, `name` i `bought`, bez `userId`,
+- parametry zapytania: filtr `bought` i sortowanie `name`,
+- ograniczenie w bazie: ta sama nazwa u dwóch użytkowników przechodzi, a druga taka sama
+  u jednego użytkownika kończy się błędem bazy `Unique constraint failed`.
+
+Ostatni test pokazuje, że regułę z `@@unique([userId, name])` pilnuje sama baza, niezależnie
+od sprawdzenia w serwisie. Gdyby dwa zapytania z tą samą nazwą przyszły jednocześnie, oba mogłyby
+przejść sprawdzenie w serwisie, ale baza zapisze tylko jedno. Drugie skończy się wtedy błędem 500,
+bo serwis nie zamienia tego błędu bazy na 409. Tak samo zachowuje się rejestracja dwóch kont
+z tym samym e-mailem w tej samej chwili. Limit `MAX_ITEMS` nie ma odpowiednika w bazie, więc
+jednoczesne zapytania mogą go nawet przekroczyć. Pełne rozwiązanie wymaga transakcji albo
+zamiany błędu bazy na 409, co w tym przykładzie pomijam.
+
+```
+ Test Files  3 passed (3)
+      Tests  12 passed (12)
+```
+
+Plik `test.db` jest w `.gitignore` razem z `dev.db` (wzorzec `*.db`).

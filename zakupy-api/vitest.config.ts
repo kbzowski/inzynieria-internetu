@@ -2,7 +2,10 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: ['src/**/*.spec.ts'],
+    include: ['src/**/*.spec.ts', 'test/**/*.spec.ts'],
+    globalSetup: 'test/global-setup.ts',
+    // jedna wspolna baza test.db, wiec pliki testow po kolei, a nie rownolegle
+    fileParallelism: false,
     // Vitest nie wczytuje .env, a env.ts bez tych zmiennych zatrzymuje program
     env: {
       FRONTEND_URL: 'http://localhost:5173',
