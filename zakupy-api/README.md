@@ -87,3 +87,96 @@ Moje zmiany po wygenerowaniu:
 - instaluję Prettiera (`npm install -D -E prettier`) z ustawieniami takimi jak w pełnym szablonie Nesta
   (`.prettierrc`: pojedyncze cudzysłowy, przecinek po ostatnim elemencie) i dodaję skrypt `format`,
 - dodaję `.gitignore` z katalogami `node_modules` i `dist`.
+
+## Krok 2 – warstwy
+
+Wszystko w jednym pliku szybko robi się nieczytelne. Kod dzielę na pliki i na trzy warstwy
+(architektura warstwowa). Każda warstwa ma jedno zadanie:
+
+| warstwa | plik | zadanie |
+|---|---|---|
+| kontroler | `items.controller.ts` | HTTP: adres, metoda, parametry, kod odpowiedzi |
+| serwis | `items.service.ts` | reguły aplikacji, np. co zrobić, gdy produktu nie ma |
+| repozytorium | `items.repository.ts` | zapis i odczyt danych |
+
+Kontroler woła serwis, serwis woła repozytorium. Żadna warstwa nie sięga dwa poziomy niżej.
+Na razie dane są w zwykłej tablicy w pamięci, więc po restarcie serwera wracają trzy przykładowe
+produkty. Później tablicę zastąpi baza danych i zmieni się wtedy głównie repozytorium.
+
+Pliki produktów są w katalogu `src/items`:
+
+- `item.dto.ts` – typ `ItemDto`, czyli kształt produktu, który API wysyła klientowi
+  (DTO, ang. data transfer object, obiekt do przesyłania danych). Pola są takie same jak w typie `Item`
+  w projekcie `lista-zakupow`,
+- `items.repository.ts` – tablica z produktami i metoda `findAll()`,
+- `items.service.ts` i `items.controller.ts` – na razie tylko przekazują listę dalej,
+- `items.module.ts` – moduł, który łączy te klasy.
+
+Kontroler ma w dekoratorze przedrostek adresu, a metoda tylko resztę:
+
+```ts
+@Controller('items')
+export class ItemsController {
+  constructor(private readonly itemsService: ItemsService) {}
+
+  @Get()
+  findAll() {
+    return this.itemsService.findAll();
+  }
+}
+```
+
+`@Controller('items')` razem z `@Get()` daje `GET /items`. Tablica zwrócona z metody trafia
+do klienta jako JSON.
+
+W module wpisuję kontroler oraz klasy, które Nest ma tworzyć i wstrzykiwać (providers):
+
+```ts
+@Module({
+  controllers: [ItemsController],
+  providers: [ItemsService, ItemsRepository],
+})
+export class ItemsModule {}
+```
+
+Nest widzi, że konstruktor `ItemsController` potrzebuje `ItemsService`, a konstruktor `ItemsService`
+potrzebuje `ItemsRepository`. Tworzy więc najpierw repozytorium, potem serwis, na końcu kontroler.
+Każdą z tych klas tworzy raz, a jeden obiekt dostają wszyscy, którzy go potrzebują.
+Moduł główny `AppModule` (`src/app.module.ts`) tylko importuje `ItemsModule`, a `main.ts`
+zostaje z samą funkcją startową.
+
+Importy własnych plików mają końcówkę `.js`, choć pliki mają `.ts`. Tak wymaga format ESM:
+adres w imporcie wskazuje plik, który będzie istniał po kompilacji w katalogu `dist`.
+
+Podobne pliki potrafi wygenerować CLI (`npx nest g resource items`). Generator tworzy jednak
+od razu komplet metod CRUD i osobne klasy DTO, a repozytorium nie tworzy wcale, więc tutaj piszę
+wszystko ręcznie, po kawałku.
+
+### Zapytania z pliku `requests.http`
+
+Od tego kroku w projekcie jest plik `requests.http` z gotowymi zapytaniami. To zwykły plik tekstowy,
+który WebStorm otwiera we wbudowanym kliencie HTTP. Zielona strzałka przy zapytaniu wysyła je,
+a odpowiedź pojawia się w panelu obok.
+
+```http
+@baseUrl = http://localhost:3000
+
+### Lista produktów
+GET {{baseUrl}}/items
+```
+
+`###` oddziela zapytania i nadaje im nazwę, `@baseUrl` to zmienna, a `{{baseUrl}}` wstawia jej wartość.
+W kolejnych krokach plik będzie rósł razem z API.
+
+Odpowiedź na `GET /items`:
+
+```json
+[
+  { "id": "11111111-1111-4111-8111-111111111111", "name": "Mleko", "bought": false },
+  { "id": "22222222-2222-4222-8222-222222222222", "name": "Chleb", "bought": true },
+  { "id": "33333333-3333-4333-8333-333333333333", "name": "Jajka", "bought": false }
+]
+```
+
+Identyfikatory przykładowych produktów są stałe, żeby łatwo było je wpisywać w kolejnych krokach.
+Mają format UUID, tak jak identyfikatory w `lista-zakupow`.
