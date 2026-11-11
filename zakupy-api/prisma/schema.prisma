@@ -8,10 +8,11 @@ datasource db {
 }
 
 model User {
-  id           String @id @default(uuid(7))
-  email        String @unique
-  passwordHash String
-  items        Item[]
+  id            String         @id @default(uuid(7))
+  email         String         @unique
+  passwordHash  String
+  items         Item[]
+  refreshTokens RefreshToken[]
 }
 
 model Item {
@@ -24,4 +25,13 @@ model Item {
 
   // nazwa jest unikalna na liscie jednego uzytkownika
   @@unique([userId, name])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid(7))
+  // w bazie tylko skrot SHA-256, sam token zna wylacznie przegladarka
+  tokenHash String   @unique
+  expiresAt DateTime
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

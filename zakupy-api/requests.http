@@ -130,3 +130,16 @@ Content-Type: application/json
 ### Podsumowanie listy
 GET {{baseUrl}}/items/summary
 Authorization: Bearer {{accessToken}}
+
+### Nowy access token (ciasteczko z logowania, zapamiętuje nowy token)
+POST {{baseUrl}}/auth/refresh
+
+> {%
+  client.global.set('accessToken', response.body.accessToken);
+%}
+
+### Wylogowanie (204, usuwa ciasteczko)
+POST {{baseUrl}}/auth/logout
+
+### Odświeżenie po wylogowaniu (401)
+POST {{baseUrl}}/auth/refresh

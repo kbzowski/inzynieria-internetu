@@ -8,8 +8,9 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   // krotki sekret latwo odgadnac, a z nim podrobic dowolny token
   JWT_SECRET: z.string().min(32),
-  // czas waznosci tokenu w sekundach
+  // czasy waznosci tokenow w sekundach
   ACCESS_TOKEN_TTL: z.coerce.number().int().positive(),
+  REFRESH_TOKEN_TTL: z.coerce.number().int().positive(),
 });
 
 const result = envSchema.safeParse(process.env);

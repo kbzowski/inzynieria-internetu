@@ -17,7 +17,8 @@ export function configureApp(app: INestApplication) {
   // sprawdza parametry, ktore maja schemat w dekoratorze (@Body({ schema }) itp.)
   app.useGlobalPipes(new StandardSchemaValidationPipe());
   // przegladarka pozwoli czytac odpowiedzi tylko stronie z tego adresu
-  app.enableCors({ origin: env.FRONTEND_URL });
+  // credentials: przegladarka wysle ciasteczko z refresh tokenem
+  app.enableCors({ origin: env.FRONTEND_URL, credentials: true });
   // Ctrl+C wywola onModuleDestroy, a PrismaService zamknie polaczenie z baza
   app.enableShutdownHooks();
 

@@ -1048,3 +1048,128 @@ Authorization: Bearer {{accessToken}}
 
 Na stronie `/docs` przycisk „Authorize” pozwala wkleić token, który Swagger dołączy do zapytań
 (to daje `addBearerAuth()` w `configureApp` i `@ApiBearerAuth()` nad kontrolerem).
+
+## Krok 12 – refresh token w ciasteczku
+
+Access token jest ważny 15 minut. Krótki czas ogranicza szkody, gdy token wycieknie, ale użytkownik
+nie powinien logować się co kwadrans. Dlatego logowanie wydaje drugi token, refresh token, który
+służy tylko do pobrania nowego access tokenu i jest ważny 7 dni (`REFRESH_TOKEN_TTL=604800` w `.env`).
+
+| zapytanie | działanie |
+|---|---|
+| `POST /auth/login` | jak wcześniej, a dodatkowo ustawia ciasteczko z refresh tokenem |
+| `POST /auth/refresh` | wymienia refresh token z ciasteczka na nowy access token i nowy refresh token |
+| `POST /auth/logout` | unieważnia refresh token i usuwa ciasteczko (204) |
+
+### Gdzie trzymać tokeny
+
+Access token frontend trzyma w zmiennej, w pamięci strony. Po odświeżeniu strony zmienna znika,
+więc frontend woła `/auth/refresh` i dostaje nowy token bez ponownego logowania.
+
+Refresh token jest długo ważny, więc trafia do ciasteczka z flagą `httpOnly`. Przeglądarka sama dołącza
+je do zapytań, ale JavaScript strony nie ma do niego dostępu. Atak XSS (Cross-Site Scripting) polega
+na wstrzyknięciu na stronę cudzego skryptu. Taki skrypt nie odczyta refresh tokenu, więc nie wywiezie go
+i nie użyje później. Dopóki strona z wstrzykniętym skryptem jest otwarta, może on jednak wysyłać
+zapytania w imieniu użytkownika. `httpOnly` ogranicza więc skutki XSS, ale nie chroni przed samym atakiem.
+
+```ts
+response.cookie(REFRESH_COOKIE, session.refreshToken, {
+  httpOnly: true,
+  sameSite: 'strict',
+  path: '/auth',
+  maxAge: env.REFRESH_TOKEN_TTL * 1000,
+});
+```
+
+- `sameSite: 'strict'` – przeglądarka nie dołączy ciasteczka do zapytania wysłanego z innej witryny (site).
+  Obca strona nie może więc wywołać `/auth/refresh` w imieniu zalogowanego użytkownika (CSRF,
+  Cross-Site Request Forgery). Witryna to schemat i domena, bez portu, więc jest szersza niż
+  pochodzenie z kroku 9. `localhost:5173` i `localhost:3000` to ta sama witryna i frontend
+  z `lista-zakupow` dostanie ciasteczko. Tą samą witryną jest też każda inna aplikacja na `localhost`,
+- `path: '/auth'` – ciasteczko idzie tylko do tras `/auth/...`, a nie do `/items`,
+- `maxAge` w Expressie podaje się w milisekundach. Nest 12.1 ma też własną metodę `setCookie`,
+  w której `maxAge` jest w sekundach, więc przy zmianie sposobu zapisu łatwo o pomyłkę tysiąckrotną.
+
+Na serwerze z HTTPS trzeba jeszcze dodać `secure: true`, żeby ciasteczko nie szło zwykłym HTTP.
+
+Kontroler zapisuje ciasteczko przez obiekt odpowiedzi Expressa (`@Res({ passthrough: true })`).
+`passthrough: true` sprawia, że wartość zwrócona z metody nadal trafia do klienta jako JSON.
+Odczyt ciasteczka zapewnia dekorator `@Cookies` wbudowany w Nest od wersji 12.1, więc nie potrzeba
+pakietu `cookie-parser`:
+
+```ts
+@Post('refresh')
+@HttpCode(200)
+async refresh(
+  @Cookies(REFRESH_COOKIE) refreshToken: string | undefined,
+  @Res({ passthrough: true }) response: Response,
+) {
+  return sendSession(response, await this.authService.refresh(refreshToken));
+}
+```
+
+Przeglądarka wyśle ciasteczko do API na innym porcie tylko wtedy, gdy frontend ustawi w `fetch`
+opcję `credentials: 'include'`, a serwer pozwoli na to w CORS:
+
+```ts
+app.enableCors({ origin: env.FRONTEND_URL, credentials: true });
+```
+
+Przy `credentials: true` nie wolno użyć `origin: '*'`. Przeglądarka odrzuci taką odpowiedź, więc
+adres frontendu musi być podany wprost.
+
+### Refresh token w bazie
+
+Refresh token to 32 losowe bajty (`randomBytes(32)`), a nie JWT. Musi dać się go unieważnić
+przy wylogowaniu, więc i tak trzeba go zapisać w bazie. Model `RefreshToken` przechowuje tylko
+skrót SHA-256 tokenu, datę ważności i właściciela:
+
+```prisma
+model RefreshToken {
+  id        String   @id @default(uuid(7))
+  tokenHash String   @unique
+  expiresAt DateTime
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+```
+
+Gdy ktoś wykradnie zawartość tabeli, dostanie skróty, których nie da się wysłać jako token.
+Zwykły SHA-256 wystarcza, bo token jest losowy i długi, więc nie da się go odgadnąć tak jak hasła.
+
+Migracja tylko dodaje tabelę, więc wystarczy `npm run db:migrate`, bez czyszczenia bazy.
+
+### Rotacja
+
+Każdy refresh token działa jeden raz. `AuthService.refresh` usuwa użyty token z bazy i wydaje nowy:
+
+```ts
+const stored = await this.refreshTokens.findByHash(tokenHash);
+const removed = await this.refreshTokens.remove(tokenHash);
+if (!stored || !removed || stored.expiresAt < new Date()) {
+  throw new UnauthorizedException('Sesja wygasła, zaloguj się ponownie');
+}
+return this.createSession(stored.user);
+```
+
+`remove` zwraca `false`, gdy tokenu już nie było. Dzięki temu z dwóch jednoczesnych zapytań z tym
+samym tokenem nową sesję dostanie tylko jedno. Gdy dwie karty przeglądarki odświeżają token w tej
+samej chwili, jedna z nich dostanie 401.
+
+Ponowne użycie starego tokenu kończy się 401:
+
+```
+POST /auth/refresh  (ciasteczko z poprzednim tokenem)
+{"message":"Sesja wygasła, zaloguj się ponownie","error":"Unauthorized","statusCode":401}
+```
+
+Rotacja nie zatrzymuje napastnika, który wykradł token i użył go pierwszy, bo dostaje on nowy token.
+Kradzież wychodzi na jaw, gdy prawowity użytkownik przy następnym odświeżeniu dostanie 401.
+Pełniejsze rozwiązania unieważniają wtedy wszystkie tokeny użytkownika. Ten przykład tego nie robi
+i nie usuwa też z bazy tokenów, które wygasły bez wylogowania.
+
+### Zapytania
+
+Klient HTTP w WebStormie zapamiętuje ciasteczka tak jak przeglądarka. Po „Logowanie” zapytanie
+„Nowy access token” wysyła ciasteczko samo, a skrypt po odpowiedzi podmienia zmienną `accessToken`.
+Po „Wylogowanie” kolejna próba odświeżenia kończy się 401.
