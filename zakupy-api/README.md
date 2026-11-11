@@ -5,7 +5,7 @@ z bazą danych, logowaniem i testami. Produkt ma ten sam kształt co w projekcie
 (`id`, `name`, `bought`), więc później frontend będzie mógł korzystać z tego API.
 
 Wersje: Node 24, npm 11, NestJS 12.4, @nestjs/cli 12.0, @nestjs/swagger 12.1, TypeScript 6.0, Zod 4.6,
-Prisma 7.10 z bazą SQLite, @nestjs/jwt 12.0, argon2 0.45, Vitest 5.1.
+Prisma 7.10 z bazą SQLite, @nestjs/jwt 12.0, argon2 0.45, Vitest 5.1, supertest 7.3.
 
 ## Uruchomienie
 
@@ -1338,3 +1338,85 @@ zamiany błędu bazy na 409, co w tym przykładzie pomijam.
 ```
 
 Plik `test.db` jest w `.gitignore` razem z `dev.db` (wzorzec `*.db`).
+
+## Krok 15 – testy całego API
+
+Ostatnie testy wysyłają zapytania HTTP do całej aplikacji: z kontrolerami, strażnikiem, walidacją
+i bazą `test.db`. Sprawdzają to, co widzi klient: kody odpowiedzi, treść i ciasteczka.
+Nest nazywa takie testy e2e (end-to-end) i daje plikom końcówkę `.e2e-spec.ts`. Ściśle biorąc,
+to też testy integracyjne: aplikacja działa w tym samym procesie co test, bez przeglądarki
+i bez osobno uruchamianego serwera.
+
+```bash
+npm install -E -D supertest @types/supertest
+```
+
+Biblioteka supertest uruchamia serwer HTTP aplikacji na losowym wolnym porcie tylko na czas zapytania,
+dlatego testy nie kolidują z `npm run start:dev` na porcie 3000.
+W `vitest.config.ts` do `include` dochodzi wzorzec `test/**/*.e2e-spec.ts`.
+
+### Aplikacja w teście
+
+```ts
+const moduleRef = await Test.createTestingModule({
+  imports: [AppModule],
+}).compile();
+app = moduleRef.createNestApplication(appOptions);
+configureApp(app);
+await app.init();
+```
+
+Test buduje aplikację z tych samych części co `main.ts`: `appOptions` z kroku 7 i `configureApp`
+z kroku 5. Bez `configureApp` nie byłoby walidacji, więc test zapytania ze złymi danymi dostałby
+inną odpowiedź niż prawdziwy klient. Bez `appOptions` trasa `/items/summary` byłaby zasłonięta.
+Dlatego te ustawienia od początku były w osobnym pliku, a nie bezpośrednio w `main.ts`.
+
+`app.init()` przygotowuje aplikację, ale nie uruchamia nasłuchiwania na porcie.
+`app.close()` po testach zamyka ją razem z połączeniem z bazą.
+
+### Zapytania w teście
+
+```ts
+it('odpowiada 404 na produkt innego użytkownika', async () => {
+  const ala = await login('ala@example.com');
+  const created = await request(app.getHttpServer())
+    .post('/items')
+    .set('Authorization', ala.authorization)
+    .send({ name: 'Mleko' })
+    .expect(201);
+
+  await request(app.getHttpServer())
+    .get(`/items/${created.body.id}`)
+    .set('Authorization', ala.authorization)
+    .expect(200);
+
+  const ola = await login('ola@example.com');
+  await request(app.getHttpServer())
+    .get(`/items/${created.body.id}`)
+    .set('Authorization', ola.authorization)
+    .expect(404);
+});
+```
+
+`login` to pomocnicza funkcja w pliku testu: zakłada konto, loguje się i zwraca nagłówek
+`Authorization` oraz ciasteczko z refresh tokenem. `.expect(404)` sprawdza kod odpowiedzi.
+
+Testy sprawdzają:
+
+- 401 bez tokenu,
+- dodanie produktu (201, nazwa po obcięciu spacji) i listę,
+- 400 dla nazwy, która jest liczbą, razem z dosłownym komunikatem walidacji,
+- 404 dla produktu innego użytkownika, przy 200 dla właścicielki,
+- działanie `/items/summary` mimo trasy `/items/:id`, na liście z dwoma produktami, z których jeden jest kupiony,
+- rotację refresh tokenu: pierwsze odświeżenie daje 200 i nowe ciasteczko, drugie ze starym ciasteczkiem
+  daje 401, a nowe ciasteczko działa.
+
+```
+ Test Files  4 passed (4)
+      Tests  18 passed (18)
+```
+
+Trzy rodzaje testów sprawdzają różne rzeczy. Testy jednostkowe są szybkie i wskazują dokładnie,
+która reguła nie działa. Testy repozytorium sprawdzają zapytania do bazy. Testy API sprawdzają,
+czy wszystkie części razem dają klientowi właściwą odpowiedź, ale przy błędzie trzeba dopiero
+szukać, w której warstwie on jest.

@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: ['src/**/*.spec.ts', 'test/**/*.spec.ts'],
+    include: ['src/**/*.spec.ts', 'test/**/*.spec.ts', 'test/**/*.e2e-spec.ts'],
     globalSetup: 'test/global-setup.ts',
     // jedna wspolna baza test.db, wiec pliki testow po kolei, a nie rownolegle
     fileParallelism: false,
