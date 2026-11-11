@@ -18,6 +18,8 @@ export function configureApp(app: INestApplication) {
   app.useGlobalPipes(new StandardSchemaValidationPipe());
   // przegladarka pozwoli czytac odpowiedzi tylko stronie z tego adresu
   app.enableCors({ origin: env.FRONTEND_URL });
+  // Ctrl+C wywola onModuleDestroy, a PrismaService zamknie polaczenie z baza
+  app.enableShutdownHooks();
 
   // dokumentacja API pod /docs, opis tras i schematow z kodu
   const config = new DocumentBuilder().setTitle('Zakupy API').build();

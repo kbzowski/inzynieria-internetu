@@ -5,6 +5,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   FRONTEND_URL: z.url(),
   MAX_ITEMS: z.coerce.number().int().positive(),
+  DATABASE_URL: z.string().min(1),
 });
 
 const result = envSchema.safeParse(process.env);

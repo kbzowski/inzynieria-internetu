@@ -4,13 +4,16 @@ Serwer z REST API dla listy zakupów. W kolejnych krokach rośnie od jednego pli
 z bazą danych, logowaniem i testami. Produkt ma ten sam kształt co w projekcie `lista-zakupow`
 (`id`, `name`, `bought`), więc później frontend będzie mógł korzystać z tego API.
 
-Wersje: Node 24, npm 11, NestJS 12.4, @nestjs/cli 12.0, @nestjs/swagger 12.1, TypeScript 6.0, Zod 4.6.
+Wersje: Node 24, npm 11, NestJS 12.4, @nestjs/cli 12.0, @nestjs/swagger 12.1, TypeScript 6.0, Zod 4.6,
+Prisma 7.10 z bazą SQLite.
 
 ## Uruchomienie
 
 ```bash
 npm install          # instaluje zależności (po pobraniu projektu)
 cp .env.example .env # konfiguracja (od kroku 8), w wierszu poleceń cmd: copy .env.example .env
+npm run db:migrate   # tworzy bazę dev.db i jej tabele (od kroku 10)
+npm run db:seed      # wpisuje do bazy przykładowe dane (od kroku 10)
 npm run start:dev    # serwer z automatycznym restartem po zmianie kodu, http://localhost:3000
 npm run build        # kompilacja do katalogu dist i sprawdzenie typów
 npm run start:prod   # uruchomienie skompilowanej wersji z dist
@@ -744,3 +747,112 @@ w `@Body`, `@Param` i `@Query`. Dla `POST /items` opis treści wygląda tak:
 
 Odpowiedzi nie mają w opisie schematu, bo kontroler nie podaje ich przez dekoratory. Opis wejścia
 wystarcza, żeby z `/docs` wysłać każde zapytanie z tego projektu.
+
+## Krok 10 – baza danych SQLite i Prisma
+
+Produkty trafiają teraz do bazy danych, więc przetrwają restart serwera. Baza to SQLite: cała
+zapisuje się w jednym pliku `dev.db` w katalogu projektu i nie wymaga osobnego serwera bazy.
+Do bazy łączę się przez Prismę, bibliotekę ORM (Object-Relational Mapping), która zamienia
+wywołania metod w TypeScripcie na zapytania SQL.
+
+```bash
+npm install -E @prisma/client@7 @prisma/adapter-better-sqlite3@7
+npm install -E -D prisma@7
+npx prisma init --datasource-provider sqlite --no-skills
+```
+
+Wersja `@7` jest potrzebna, bo bez niej npm instaluje dziś wersję testową Prismy 8. Ostrzeżenie
+`npm warn install-scripts` przy instalacji jest tylko informacją.
+
+`prisma init` tworzy plik `prisma/schema.prisma`, plik konfiguracji i wpis w `.env`. Moje zmiany:
+
+- plik konfiguracji nazywa się u mnie `prisma.config.ts` (tak jak w dokumentacji Prismy) i wczytuje `.env`
+  funkcją `process.loadEnvFile()` z Node zamiast pakietu `dotenv`. Robi to tylko wtedy, gdy plik `.env`
+  istnieje, bo zaraz po pobraniu projektu go jeszcze nie ma,
+- w `.env` dochodzi `DATABASE_URL=file:./dev.db`, a do schematu w `env.ts` pole `DATABASE_URL`,
+- `.gitignore` pomija plik bazy (`*.db`) i wygenerowany kod (`src/generated`).
+
+### Model i migracja
+
+```prisma
+model Item {
+  id     String  @id @default(uuid(7))
+  name   String  @unique
+  bought Boolean @default(false)
+}
+```
+
+Model odpowiada typowi `ItemDto`. `@unique` sprawia, że baza sama odrzuci drugą taką samą nazwę
+(co się wtedy dzieje, pokazuje krok 14).
+Identyfikator to UUID w wersji 7, którego początek zapisuje czas utworzenia. Dlatego sortowanie
+po `id` daje kolejność dodania, tak jak wcześniej w tablicy.
+
+```bash
+npm run db:migrate    # prisma migrate dev && prisma generate
+```
+
+`prisma migrate dev` porównuje model z bazą, zapisuje różnicę jako plik SQL w `prisma/migrations`
+i wykonuje go na bazie. Migracje trafiają do repozytorium, żeby każdy mógł odtworzyć tę samą bazę.
+Kod klienta bazy generuje osobne polecenie `prisma generate`, bo w Prismie 7 migracja go nie uruchamia.
+Skrypt `db:migrate` wywołuje je zaraz po migracji, a skrypt `postinstall` po każdym `npm install`.
+
+Przykładowe dane wpisuje `src/seed.ts` (`npm run db:seed`). Skrypt jest w `src`, bo wygenerowany
+klient Prismy to kod TypeScript, który trzeba skompilować razem z resztą projektu.
+
+### Repozytorium na Prismie
+
+Klient bazy to klasa `PrismaService` w `src/prisma`. Dziedziczy po wygenerowanym `PrismaClient`
+i przekazuje mu sterownik SQLite. `PrismaModule` ma dekorator `@Global()`, więc `PrismaService`
+można wstrzyknąć w każdym module bez dopisywania importu.
+
+Zmienia się głównie `items.repository.ts`. Tablicę zastępują wywołania Prismy:
+
+```ts
+findAll(query: ItemsQueryDto): Promise<ItemDto[]> {
+  return this.prisma.item.findMany({
+    where: { bought: query.bought, name: { contains: query.q } },
+    orderBy: query.sort ? sortOrder[query.sort] : { id: 'asc' },
+  });
+}
+
+findById(id: string): Promise<ItemDto | null> {
+  return this.prisma.item.findUnique({ where: { id } });
+}
+```
+
+Prisma pomija w `where` pola o wartości `undefined`, więc parametr, którego nie podano, nie filtruje listy.
+
+Zapytanie do bazy trwa, więc metody Prismy zwracają obietnicę (`Promise`). Dlatego metody repozytorium,
+serwisu i kontrolera stają się asynchroniczne (`async`, `await`). Poza tym serwis i kontroler się
+nie zmieniają, a reguły (404, 409) i trasy zostają takie same. Zmienia się tylko repozytorium,
+czemu służył podział na warstwy z kroku 2.
+
+`app.enableShutdownHooks()` w `configureApp` sprawia, że po Ctrl+C Nest wywołuje `onModuleDestroy`,
+a `PrismaService` zamyka wtedy połączenie z bazą.
+
+### Identyfikatory w `requests.http`
+
+Identyfikatory tworzy teraz baza, więc są inne po każdym `npm run db:seed`. Zapytanie
+„Lista produktów” zapamiętuje je w zmiennych skryptem uruchamianym po odpowiedzi:
+
+```http
+GET {{baseUrl}}/items
+
+> {%
+  client.global.set('itemId', response.body[0].id);
+%}
+```
+
+Kolejne zapytania używają `{{itemId}}`. Dlatego po uruchomieniu serwera najpierw trzeba wysłać
+„Lista produktów”.
+
+### Różnice między tablicą a SQLite
+
+- `?q=` w SQLite ignoruje wielkość liter tylko dla liter bez polskich znaków: `?q=MLE` znajduje Mleko,
+  ale `?q=łos` nie znajduje „Łosoś”,
+- `?sort=name` porównuje kody znaków, więc „Łosoś” trafia za „Mleko”, a nie między „L” i „M”,
+- `%` i `_` w `?q=` działają w SQLite jak symbole wieloznaczne operatora `LIKE`, więc `?q=%` zwraca
+  wszystkie produkty.
+
+Tablica w pamięci porównywała nazwy według zasad języka polskiego. W SQLite wymagałoby to
+dodatkowych rozszerzeń, więc w przykładzie zostaje zachowanie domyślne.

@@ -56,6 +56,6 @@ export class ItemsController {
   @Delete(':id')
   @HttpCode(204)
   remove(@Param('id', { schema: itemIdSchema }) id: string) {
-    this.itemsService.remove(id);
+    return this.itemsService.remove(id);
   }
 }

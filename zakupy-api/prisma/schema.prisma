@@ -1,0 +1,15 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Item {
+  // uuid(7) zaczyna sie od czasu utworzenia, wiec sortowanie po id daje kolejnosc dodania
+  id     String  @id @default(uuid(7))
+  name   String  @unique
+  bought Boolean @default(false)
+}
